@@ -220,14 +220,14 @@ _NAMES = json.loads(r'''
   {"id": 208, "name": "reverb.size", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "all"},
   {"id": 209, "name": "reverb.damping", "kind": "float", "min": 0, "max": 1, "default": 0.4, "unit": "", "scope": "all"},
   {"id": 210, "name": "reverb.type", "kind": "choice", "min": 0, "max": 4, "default": 0, "unit": "", "choices": ["room", "hall", "plate", "cathedral", "spring"], "scope": "all"},
-  {"id": 211, "name": "reverb.decay", "kind": "float", "min": 0, "max": 30, "default": 0, "unit": "seconds", "scope": "all"},
+  {"id": 211, "name": "reverb.decay", "kind": "float", "min": 0, "max": 30, "default": 0, "unit": "seconds", "labels": {"0": "auto"}, "scope": "all"},
   {"id": 212, "name": "chorus.rate", "kind": "float", "min": 0.05, "max": 10, "default": 0.8, "unit": "hz", "scope": "all"},
   {"id": 213, "name": "chorus.depth", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "all"},
   {"id": 216, "name": "voices", "kind": "int", "min": 1, "max": 64, "default": 64, "unit": "voices", "scope": "all"},
   {"id": 217, "name": "input.part", "kind": "int", "min": 0, "max": 63, "default": 31, "unit": "part", "scope": "all"},
   {"id": 218, "name": "input.gain", "kind": "float", "min": 0, "max": 8, "default": 1, "unit": "gain", "scope": "all"},
   {"id": 219, "name": "input.monitor", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "all"},
-  {"id": 220, "name": "input.gate", "kind": "float", "min": -100, "max": 0, "default": -100, "unit": "db", "scope": "all"},
+  {"id": 220, "name": "input.gate", "kind": "float", "min": -100, "max": 0, "default": -100, "unit": "db", "labels": {"-100": "off"}, "scope": "all"},
   {"id": 221, "name": "input.gate_release", "kind": "float", "min": 0.005, "max": 2, "default": 0.15, "unit": "seconds", "scope": "all"},
   {"id": 222, "name": "reverb.predelay", "kind": "float", "min": 0, "max": 0.2, "default": 0, "unit": "seconds", "scope": "all"},
   {"id": 223, "name": "reverb.low_cut", "kind": "float", "min": 20, "max": 1000, "default": 120, "unit": "hz", "scope": "all"}
@@ -1686,6 +1686,15 @@ class Synth:
         # A time from nothing to twenty seconds is turned evenly by how much longer it gets, from a thousandth of a second.
         if unit == "seconds" and entry["min"] == 0 and entry["max"] >= 1:
             d["min"], d["log"] = 0.001, True
+        # Values that mean something else (a reverb_decay of 0 is "auto"), as synths.js describes them. Where nothing
+        # is one of them, the dial still starts from nothing: it is turned by ratio from a thousandth just above it.
+        if entry.get("labels"):
+            d["labels"] = {}
+            for at, word in entry["labels"].items():
+                at = float(at) / entry["scale"]
+                d["labels"][int(at) if at == int(at) else at] = word
+            if d.get("log") and 0 in d["labels"]:
+                d["min"], d["log_from"] = 0, 0.001
         return d
 
     def _told(self, name, value):
