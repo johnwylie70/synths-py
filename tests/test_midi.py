@@ -164,7 +164,8 @@ def test_a_knob_that_turned_a_setting_on_the_page_is_remembered_here(sent):
     assert lead.cutoff == 632.5
 
 
-def test_no_midi_is_said_once_and_nothing_is_raised(sent, capsys):
+def test_with_no_midi_nothing_is_raised_and_the_page_is_the_one_to_say_so(sent, capsys):
+    """The page, where the devices would be, says once why there is no MIDI. Python is told `available: False`."""
     synths._said.clear()
     seen = []
     on_midi_devices(seen.append)
@@ -174,8 +175,8 @@ def test_no_midi_is_said_once_and_nothing_is_raised(sent, capsys):
         receive_midi({"type": "devices", "inputs": [], "outputs": [], "available": False})
         send_midi_note("C4")
         use_midi_output("Minilogue")
-    err = capsys.readouterr().err
-    assert err.count("there is no MIDI here") == 1 and "\n" == err[-1] and err.count("\n") == 1, err
+        lead.learn("cutoff")
+    assert capsys.readouterr().err == "", "the page's one message is the only one"
     assert seen[-1] == {"inputs": [], "outputs": [], "available": False} and midi_devices()["available"] is False
 
 

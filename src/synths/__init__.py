@@ -1846,10 +1846,7 @@ class _Midi:
             if kind == "devices":
                 self.devices = {"inputs": list(m.get("inputs") or ()), "outputs": list(m.get("outputs") or ()),
                                 "available": bool(m.get("available"))}
-                if not self.devices["available"]:
-                    _tell("there is no MIDI here, so nothing will be received or sent and the rest of the program "
-                          "carries on. MIDI works in Chrome, Edge and Firefox on a computer; Safari, iPhones and "
-                          "iPads have none for web pages.")
+                # With no MIDI (`available` False) the page has said why, once, in its console; nothing more is said here.
                 for fn in list(self.on["devices"]):
                     _call(fn, self.devices_now())
             elif kind == "set":

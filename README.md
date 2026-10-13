@@ -346,7 +346,7 @@ It follows the notes, how hard you hit each key, the pitch wheel, the modulation
 
 The page plays the synth itself, where the keyboard is, and does not ask Python first. So a key sounds at once, even while your program is busy, or runs on another computer.
 
-MIDI works in Chrome, Edge and Firefox on a computer. Safari, iPhones and iPads have no MIDI for web pages. Where there is none your program still runs: it says so once, and everything else carries on.
+MIDI works in Chrome, Edge and Firefox on a computer. Safari, iPhones and iPads have no MIDI for web pages. Where there is none your program still runs: the page says so once, in the browser's console, and everything else carries on.
 
 ### Your own functions
 
