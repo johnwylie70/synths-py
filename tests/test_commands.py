@@ -17,9 +17,10 @@ FORMAT = {
     "note": {"id": str, "note": NOTES, "len": NUMBER + (type(None),), "vel": NUMBER, "pan": NUMBER, "h": int, "arp": dict},
     "off": {"id": str, "h": int, "note": list, "cut": bool},
     "voice": {"id": str, "h": int, "pitch": NUMBER, "freq": NUMBER, "glide": NUMBER, "vol": NUMBER, "pan": NUMBER, "kill": bool, "arp": (dict, type(None))},
-    "sound": {"name": str, "vol": NUMBER, "pitch": NUMBER, "pan": NUMBER},
+    "sound": {"name": str, "vol": NUMBER, "pitch": NUMBER, "pan": NUMBER, "len": NUMBER},
+    "tempo": {"bpm": NUMBER},
     "sample": {"id": str, "url": str, "bytes": str, "note": NUMBER, "loop": (bool, list), "pingpong": bool, "name": str},
-    "tune": {"id": str, "synth": str, "steps": list, "length": NUMBER, "repeat": (bool, int, float)},
+    "tune": {"id": str, "synth": str, "steps": list, "length": NUMBER, "repeat": (bool, int, float), "beats": bool},
     "stop": {"id": str},
     "master": {"volume": NUMBER, "mute": bool, "set": dict},
     "free": {"id": str},
@@ -27,7 +28,7 @@ FORMAT = {
              "patches": dict, "files": dict, "order": int, "row": int},
 }
 NEEDS = {"synth": ["id"], "set": ["id", "set"], "note": ["id"], "off": ["id"], "voice": ["id", "h"], "sound": ["name"],
-         "sample": ["id"], "tune": ["id", "synth", "steps"], "free": ["id"], "song": ["do"], "macro": ["id", "macro"]}
+         "sample": ["id"], "tune": ["id", "synth", "steps"], "free": ["id"], "song": ["do"], "macro": ["id", "macro"], "tempo": ["bpm"]}
 
 
 def check(batch):
@@ -57,6 +58,14 @@ def test_everything_the_library_writes_is_in_the_format(sent, tmp_path):
     wav.write_bytes(b"RIFF....WAVE")
     play_sound("laser")
     play_sound("coin", 0.5, pitch=3, pan=-1, after=0.5)
+    play_sound("win", length="half", after="quarter")
+    note("C4", "quarter")
+    chord("Cm", "half")
+    rest("eighth")
+    with loop_notes(2):
+        note("C4", "eighth")
+        rest()
+    start_lines(after=1)
     play_note("C4")
     play_note(["C4", "E4", 67.5], 2, 0.3, pan=1, at=sound_time() + 1)
     tune = play_notes("C4 E4 - G4:2 C4+E4", 0.25, repeat=True, volume=0.5, hold=0.5)
@@ -67,14 +76,14 @@ def test_everything_the_library_writes_is_in_the_format(sent, tmp_path):
     lead.cutoff = 800
     lead.set(cutoff=4000, resonance=0.4, slide=2)
     lead.set("wave", "square")
-    note = lead.start("C4", 0.5)
-    note.slide_to("G4", 0.5)
-    note.pitch = "A4"
-    note.volume = 0.5
-    note.pan = -1
-    note.frequency = 440
-    note.cut()
-    note.stop()
+    held = lead.start("C4", 0.5)
+    held.slide_to("G4", 0.5)
+    held.pitch = "A4"
+    held.volume = 0.5
+    held.pan = -1
+    held.frequency = 440
+    held.cut()
+    held.stop()
     lead.note_on(60, 0.7)
     lead.note_off(60)
     lead.stop("E4")
@@ -82,10 +91,10 @@ def test_everything_the_library_writes_is_in_the_format(sent, tmp_path):
     lead.play_notes(["C4", None, ["C4", "E4"]], repeat=3)
     lead.play("Cm7", 1)
     lead.arp("Cm7")
-    chord = lead.start_arp("A3", "minor", speed=30, order="up-down", volume=0.5)
-    chord.change("F")
-    chord.speed = 20
-    chord.stop()
+    arp = lead.start_arp("A3", "minor", speed=30, order="up-down", volume=0.5)
+    arp.change("F")
+    arp.speed = 20
+    arp.stop()
     play_arp("C4", "major", 1)
     start_arp(["C4", "E4", "G4"]).stop()
     lead.set_macro([{"wave": "noise", "pitch": 24}, {"wave": "square"}, {"pitch": -5, "volume": 0.8}])
@@ -137,10 +146,84 @@ def test_a_tune_is_steps_in_seconds(sent):
     play_notes("C4 E4 - G4:2 C4+E4", 0.25, repeat=True)
     tune = sent[-1]
     assert tune["steps"] == [[0, [60], 0.225, 0.8], [0.25, [64], 0.225, 0.8], [0.75, [67], 0.45, 0.8], [1.25, [60, 64], 0.225, 0.8]]
-    assert tune["length"] == 1.5 and tune["repeat"] is True and tune["synth"] == "s1"
+    assert tune["length"] == 1.5 and tune["repeat"] is True and tune["synth"] == "s1" and "beats" not in tune
+    # With no step, or a step by name, a tune is in beats: the player keeps it to the tempo, also when that changes.
+    play_notes("C4 D4:q E4:2 -:e F4")
+    assert sent[-1]["beats"] is True and sent[-1]["repeat"] == 1 and sent[-1]["length"] == 3.5
+    assert [(s[0], s[2]) for s in sent[-1]["steps"]] == [(0, 0.45), (0.5, 0.9), (1.5, 0.9), (3, 0.45)]
+    play_notes("C4 D4", "sixteenth")
+    assert sent[-1]["steps"][1][0] == 0.25 and sent[-1]["beats"] is True
+    set_tempo(90)
+    assert sent[-1] == {"op": "tempo", "bpm": 90, "t": sent[-1]["t"]}
+    play_notes("C4:q D4", 0.5)            # in seconds, a quarter note is as long as it is at this tempo
+    assert sent[-1]["steps"][1][0] == pytest.approx(60 / 90) and "beats" not in sent[-1]
+
+
+def test_a_length_is_seconds_or_a_note_length_by_name(sent):
+    assert [length_beats(n) for n in ("whole", "half", "quarter", "eighth", "sixteenth", "1/4", "1/16", "q", "e", "quarter.", "dotted quarter")] \
+        == [4, 2, 1, 0.5, 0.25, 1, 0.25, 1, 0.5, 1.5, 1.5]
+    assert length_beats("eighth triplet") == pytest.approx(1 / 3) and length_beats("q3") == pytest.approx(2 / 3)
+    assert length_beats("minor") is None and length_beats(2) is None
+    set_tempo(60)
+    assert beats("half") == 2 and beats(3) == 3
+    play_note("C4", "quarter")
+    assert sent[-1]["len"] == 1
+    play_note("C4", 0.25)
+    assert sent[-1]["len"] == 0.25
+    make_synth("lead").arp("Cm", "eighth")
+    assert sent[-1]["len"] == 0.5 and sent[-1]["arp"]["offsets"] == [0, 3, 7]
+    play_sound("win", length="half")
+    assert sent[-1]["len"] == 2
+
+
+def test_a_tune_a_line_at_a_time(sent):
+    """Each note begins where the last ended; lines written together begin together."""
     set_tempo(120)
-    play_notes("C4 D4")
-    assert sent[-1]["steps"][1][0] == 0.25 and sent[-1]["repeat"] == 1      # half a beat a step, once
+    lead, bass = make_synth("lead"), make_synth("bass")
+    for name in ("E4", "G4"):
+        lead.note(name, "quarter")
+    lead.rest("quarter")
+    lead.chord("Cm", "half", volume=0.5)
+    bass.note("C2", "half")
+    bass.note("G2", 2)                    # a number is beats
+    notes = [c for c in sent if c["op"] == "note"]
+    start = notes[0]["t"]
+    assert [(c["id"], c["note"], round(c["t"] - start, 9), c["len"]) for c in notes] == [
+        ("s1", [64], 0, 0.475), ("s1", [67], 0.5, 0.475), ("s1", [60, 63, 67], 1.5, 0.95),
+        ("s2", [36], 0, 0.95), ("s2", [43], 1, 0.95)]
+    assert notes[2]["vel"] == 0.5
+    note("C4")                            # on the synth play_note uses, a quarter with nothing said
+    assert sent[-1]["id"] == "s3" and sent[-1]["len"] == 0.475 and sent[-1]["t"] == start
+    start_lines(after=2)
+    lead.note("C4")
+    assert sent[-1]["t"] == pytest.approx(sound_time() + 2, abs=0.01)
+
+
+def test_a_section_goes_round(sent):
+    set_tempo(120)
+    kick, snare = make_synth("kick"), make_synth("snare")
+    with loop_notes() as beat:
+        kick.note("C3", "quarter")
+        kick.rest("quarter")
+        snare.rest("quarter")
+        snare.note("A3", "quarter")
+    tunes = [c for c in sent if c["op"] == "tune"]
+    assert [(c["synth"], c["steps"], c["length"], c["repeat"], c["beats"]) for c in tunes] == [
+        ("s1", [[0, [48], 0.95, 0.8]], 2, True, True), ("s2", [[1, [57], 0.95, 0.8]], 2, True, True)]
+    assert tunes[0]["t"] == tunes[1]["t"]
+    beat.stop()
+    assert [c["id"] for c in sent[-2:]] == [t["id"] for t in tunes] and sent[-1]["op"] == "stop"
+
+    def fill():
+        kick.note("C3", "eighth")
+    loop_notes(4, fill)
+    assert sent[-1]["repeat"] == 4 and sent[-1]["length"] == 0.5
+    kick.note("C3")                       # the line carries on after the four times round
+    assert sent[-1]["t"] == pytest.approx(sent[-2]["t"] + 4 * 0.25)
+    with pytest.raises(ValueError) as e:
+        with loop_notes():
+            pass
+    assert "nothing was written to go round" in str(e.value)
 
 
 def test_settings_read_back_what_was_set(sent):
@@ -205,7 +288,10 @@ def test_notes():
     (lambda: make_synth(cutoff="high"), 'make_synth(): cutoff needs a number from 20 to 20000, not "high"'),
     (lambda: play_note("H4"), '"H4" is not a note. Write a note as a name like "C4", "F#3" or "Bb5", or as a number, where 60 is middle C'),
     (lambda: play_note(), 'play_note needs a note, as in play_note("C4")'),
-    (lambda: play_note("C4", -1), "play: the length needs a number of seconds, more than 0, not -1"),
+    (lambda: play_note("C4", -1), 'play: the length needs a number of seconds, more than 0, or a note length such as "quarter", not -1'),
+    (lambda: play_note("C4", "quater"), 'play: the length needs a number, or a note length by name: "whole", "half", "quarter", "eighth", "sixteenth" (also "1/4", "q", and "quarter." for a dotted one), not "quater". Did you mean "quarter"?'),
+    (lambda: play_notes("C4:x D4"), 'play_notes: in "C4:x", "x" is not a length. After the colon write how many steps (":2") or a note length'),
+    (lambda: note(), 'note needs a note, as in note("C4", "quarter"). For a silence, use rest("quarter")'),
     (lambda: play_notes(""), 'play_notes needs notes to play, as in play_notes("C4 E4 G4 - C5"), not ""'),
     (lambda: load_sample(), 'load_sample() needs the name of a sound file, as in load_sample("kick.wav")'),
     (lambda: set_effects(cutoff=3), "set_effects is for the effects every synth shares: max_voices,"),

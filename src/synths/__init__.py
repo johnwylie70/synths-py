@@ -9,14 +9,18 @@
     lead = make_synth("lead", cutoff=1200) # a synth of your own, from a ready-made one (bass, lead, pad, pluck, ...)
     lead.play("E4", 0.5)                   # play a note; lead.play(["C4", "E4", "G4"]) is a chord
     lead.cutoff = 800                      # every setting is a plain attribute, and changes notes already sounding
-    note = lead.start("C4")                # a note that stays until note.stop(); note.slide_to("G4", 0.5)
+    held = lead.start("C4")                # a note that stays until held.stop(); held.slide_to("G4", 0.5)
+    note("C4", "quarter"), rest("eighth")  # a tune a line at a time: each note begins where the last ended
     lead.arp("Cm7")                        # a chord from one voice, as a fast arpeggio (a C64 chord)
-    chord = lead.start_arp("Am")           # one that stays: chord.change("F"), chord.stop()
+    arp = lead.start_arp("Am")             # one that stays: arp.change("F"), arp.stop()
     drum = load_sample("kick.wav")         # a recorded sound from a file; drum.play()
     song = play_song("tune.mod")           # a tracker song (.mod, .xm) or one of synths' own: song.pause(), song.stop()
     set_volume(0.5), mute_sound(), unmute_sound(), stop_sound()
     set_effects(echo_time=0.3, reverb_size=0.8)
     set_tempo(120), beats(2)               # beats(2) is how many seconds two beats last
+
+A length is seconds as a number, or a note length by name, which follows the tempo: "whole", "half",
+"quarter", "eighth", "sixteenth" (also "1/4", "q", "quarter." for a dotted one, "eighth triplet").
 
 When something starts: everything that makes a sound takes after=seconds, at=a time read from
 sound_time(), or beat=a beat number.
@@ -62,7 +66,8 @@ __version__ = "0.1.0"
 __all__ = ["play_sound", "play_note", "play_notes", "make_synth", "load_sample", "play_song", "stop_song",
            "stop_sound", "set_volume", "mute_sound", "unmute_sound", "set_effects", "set_tempo", "beats", "beat",
            "sound_time", "sound_names", "synth_names", "setting_names", "note_number", "chord_notes", "play_arp",
-           "start_arp", "main_synth", "sound_output"]
+           "start_arp", "main_synth", "sound_output", "note", "chord", "rest", "start_lines", "loop_notes",
+           "length_beats"]
 
 # The version of the command format: `synths` in every batch.
 COMMANDS = 1
@@ -226,7 +231,9 @@ _NAMES = json.loads(r'''
  },
  "chords": {"5": [0, 7], "6": [0, 4, 7, 9], "7": [0, 4, 7, 10], "9": [0, 4, 7, 10, 14], "major": [0, 4, 7], "maj": [0, 4, 7], "minor": [0, 3, 7], "min": [0, 3, 7], "m": [0, 3, 7], "dim": [0, 3, 6], "aug": [0, 4, 8], "sus2": [0, 2, 7], "sus4": [0, 5, 7], "sus": [0, 5, 7], "power": [0, 7], "octave": [0, 12], "m6": [0, 3, 7, 9], "dom7": [0, 4, 7, 10], "maj7": [0, 4, 7, 11], "m7": [0, 3, 7, 10], "min7": [0, 3, 7, 10], "dim7": [0, 3, 6, 9], "m7b5": [0, 3, 6, 10], "mmaj7": [0, 3, 7, 11], "add9": [0, 4, 7, 14], "maj9": [0, 4, 7, 11, 14], "m9": [0, 3, 7, 10, 14]},
  "orders": {"up": 0, "down": 1, "updown": 2, "written": 3, "aswritten": 3, "given": 3, "random": 4},
- "macroWaves": {"sine": 0, "triangle": 1, "saw": 2, "pulse": 3, "square": 3, "noise": 4}
+ "macroWaves": {"sine": 0, "triangle": 1, "saw": 2, "pulse": 3, "square": 3, "noise": 4},
+ "lengths": {"whole": 4, "half": 2, "quarter": 1, "eighth": 0.5, "sixteenth": 0.25, "thirtysecond": 0.125},
+ "lengthLetters": {"w": 4, "h": 2, "q": 1, "e": 0.5, "s": 0.25, "t": 0.125}
 }
 ''')
 # NAMES:END
@@ -509,6 +516,52 @@ def _check_macro(macro, said):
     return macro
 
 
+def length_beats(name):
+    """A note length by name as a number of beats: "quarter" is 1, "eighth." is 0.75, "1/16" is 0.25, "q3" is two
+    thirds. Also by letter (w h q e s t), "dotted quarter" and "eighth triplet". Not a length: None."""
+    if not isinstance(name, str):
+        return None
+    text = re.sub(r"[\s_-]", "", name.lower())
+    times = 1
+    if text.startswith("dotted"):
+        times, text = times * 1.5, text[6:]
+    if text.endswith("triplet"):
+        times, text = times * 2 / 3, text[:-7]
+    if text.endswith("."):
+        times, text = times * 1.5, text[:-1]
+    if text.endswith("note"):
+        text = text[:-4]
+    if len(text) > 1 and re.search(r"[a-z]3$", text):
+        times, text = times * 2 / 3, text[:-1]
+    fraction = re.match(r"^(\d+)/(\d+)$", text)
+    if fraction and int(fraction.group(2)) > 0:
+        return 4 * int(fraction.group(1)) / int(fraction.group(2)) * times
+    beats = _NAMES.get("lengths", {}).get(text, _NAMES.get("lengthLetters", {}).get(text))
+    return None if beats is None else beats * times
+
+
+_NOT_A_LENGTH = ('a number, or a note length by name: "whole", "half", "quarter", "eighth", "sixteenth" '
+                 '(also "1/4", "q", and "quarter." for a dotted one)')
+
+
+def _named_beats(value, said):
+    beats = length_beats(value)
+    if beats is None:
+        raise ValueError("%s needs %s, not %s.%s" % (said, _NOT_A_LENGTH, _shown(value), _meant(value, list(_NAMES.get("lengths", {})))))
+    return beats
+
+
+def _beats_long(value, said):
+    """In a line of notes a length is beats as a number, or a note length by name. It gives beats."""
+    if value is None:
+        return 1
+    if isinstance(value, str):
+        return _named_beats(value, said)
+    if not _is_number(value) or not value > 0:
+        raise ValueError('%s needs a number of beats, more than 0, or a note length such as "quarter", not %s' % (said, _shown(value)))
+    return value
+
+
 def _amount(value, said, least=0, most=1):
     if not _is_number(value):
         raise ValueError("%s needs a number from %g to %g, not %s" % (said, least, most, _shown(value)))
@@ -557,6 +610,10 @@ class _Frames:
         # The clock when the batch leaves. A Pyctures that does not call stamp() has the time of the last command.
         self.batch["now"] = clock()
 
+    def turn(self, clock):
+        """Which turn of the program this is: a frame, or the call the page made (the top of the file, a key press)."""
+        return id(self.p.S.cmds), getattr(self.p.S, "frame_no", 0)
+
     def stamp(self):
         if self.batch is not None and self.into is self.p.S.cmds:
             self.batch["now"] = time.perf_counter()
@@ -577,6 +634,9 @@ class _Direct:
     def add(self, c, clock):
         self.send({"synths": COMMANDS, "now": clock(), "cmds": [c]})
 
+    def turn(self, clock):
+        return _turn_by_the_clock(self, clock)
+
     def page(self, id):
         return None
 
@@ -587,8 +647,21 @@ class _Nowhere:
     def add(self, c, clock):
         pass
 
+    def turn(self, clock):
+        return _turn_by_the_clock(self, clock)
+
     def page(self, id):
         return None
+
+
+def _turn_by_the_clock(transport, clock):
+    """With no frames to count, what is written within a twentieth of a second of the last thing is the same turn."""
+    now = clock()
+    last = getattr(transport, "_last", None)
+    if last is None or now - last[0] > 0.05:
+        last = transport._last = [now, (getattr(transport, "_last", None) or [0, 0])[1] + 1]
+    last[0] = now
+    return last[1]
 
 
 _host = [None]      # the sound of a host that called connect()
@@ -667,6 +740,47 @@ class _Sound:
         self.main = None
         self.chip = None
         self.output = None
+        self.lines = {}          # synth id -> the time its line of notes has reached
+        self.turn = None         # when the lines begun in this turn of the program begin
+        self.turn_of = None      # what told this turn from the last (see _Frames.turn)
+        self.writing = None      # inside loop_notes: synth id -> [its steps, the beat it has reached]
+
+    def length(self, value, said):
+        """A LENGTH is seconds as a number, or a note length by name, which is so many beats at the tempo now."""
+        if isinstance(value, str):
+            return _named_beats(value, said) * 60 / self.tempo
+        if not _is_number(value) or not value > 0:
+            raise ValueError('%s needs a number of seconds, more than 0, or a note length such as "quarter", not %s' % (said, _shown(value)))
+        return value
+
+    def line_at(self, key):
+        """Where a synth's line of notes has reached. Lines begun in the same turn of the program (the same frame
+        of a scene) begin on the same instant, so a melody and a bass written one after the other play together."""
+        now = self.transport.turn(self.clock)
+        if now != self.turn_of or self.turn is None:
+            self.turn_of, self.turn = now, self.clock()
+        at = self.lines.get(key)
+        return self.turn if at is None or at < self.turn else at
+
+    def write(self, synth, what, long, volume, pan, said):
+        """The next thing in a synth's line: notes (or None, a rest) that last so many beats."""
+        beats = _beats_long(long, said)
+        vel = None if volume is None else _amount(volume, "%s: volume" % said)
+        if self.writing is not None:
+            line = self.writing.setdefault(synth._id, [[], 0])
+            if what:
+                line[0].append([line[1], what, beats * _HELD, 0.8 if vel is None else vel])
+            line[1] += beats
+            return
+        at = self.line_at(synth._id)
+        if what:
+            c = {"op": "note", "id": synth._id, "note": what, "len": beats * 60 / self.tempo * _HELD, "t": at}
+            if vel is not None:
+                c["vel"] = vel
+            if pan is not None:
+                c["pan"] = _amount(pan, "%s: pan" % said, -1, 1)
+            self.command(c)
+        self.lines[synth._id] = at + beats * 60 / self.tempo
 
     def command(self, c):
         self.transport.add(c, self.clock)
@@ -677,6 +791,8 @@ class _Sound:
 
     def when(self, said, after=None, at=None, beat=None):
         """When a call should happen, on Python's clock."""
+        if isinstance(after, str):
+            after = self.length(after, "%s: after" % said)      # after="half": a note length from now
         for name, value in (("at", at), ("beat", beat), ("after", after)):
             if value is not None and not _is_number(value):
                 raise ValueError("%s: %s needs a number, not %s" % (said, name, _shown(value)))
@@ -695,8 +811,12 @@ class _Sound:
         return self.main
 
 
-def _steps_of(tune, step, hold, volume, said):
-    """ "C4 E4 G4 - C5:2", or a list of notes, chords (lists) and rests (None) -> the steps of a tune."""
+_HELD = 0.95         # how much of its length a note in a line sounds for
+
+
+def _steps_of(tune, step, beat, hold, volume, said):
+    """ "C4 E4:q G4 - C5:2", or a list of notes, chords (lists) and rests (None) -> the steps of a tune, in the
+    steps' own units. `step` is how long a step is in those units, and `beat` how many of the units a beat is."""
     items = [i for i in re.split(r"[\s,|]+", tune.strip()) if i] if isinstance(tune, str) else tune
     if not isinstance(items, (list, tuple)) or not items:
         raise ValueError('%s needs notes to play, as in play_notes("C4 E4 G4 - C5"), not %s' % (said, _shown(tune)))
@@ -705,21 +825,32 @@ def _steps_of(tune, step, hold, volume, said):
     steps = []
     at = 0
     for item in items:
-        what, long = item, 1
+        what, long = item, step
         if isinstance(item, str):
-            m = re.match(r"^(.*?)(?::(\d*\.?\d+))?$", item)
+            m = re.match(r"^(.*?)(?::([^:]+))?$", item)
             what = m.group(1)
-            if m.group(2):
-                long = float(m.group(2))
-                long = int(long) if long == int(long) else long
+            # After a colon: a number is so many steps, and a note length ("q", "eighth", "1/4") is itself.
+            if m.group(2) and re.match(r"^\d*\.?\d+$", m.group(2)):
+                long = float(m.group(2)) * step
+            elif m.group(2):
+                beats = length_beats(m.group(2))
+                if beats is None:
+                    raise ValueError('%s: in %s, %s is not a length. After the colon write how many steps (":2") or a note '
+                                     'length (":q", ":h", ":eighth", ":1/4")' % (said, _shown(item), _shown(m.group(2))))
+                long = beats * beat
             if re.match(r"^[-._~]*$", what):
                 what = None
             elif "+" in what:
                 what = what.split("+")
         if what is not None:
-            steps.append([at * step, _notes_of(what), long * step * hold, vel])
+            steps.append([_whole(at), _notes_of(what), _whole(long * hold), vel])
         at += long
-    return steps, at * step
+    return steps, _whole(at)
+
+
+def _whole(n):
+    """A number without a needless fraction: 2.0 is 2."""
+    return int(n) if isinstance(n, float) and n == int(n) else n
 
 
 class Note:
@@ -900,7 +1031,7 @@ class Synth:
         """A note for a while: lead.play("E4", 0.5). A list of notes is a chord. No note: the synth's own (a drum's)."""
         s = self._sound
         c = {"op": "note", "id": self._id, "note": None if note is None else _notes_of(note),
-             "len": self._length if length is None else _seconds(length, "play: the length"),
+             "len": self._length if length is None else s.length(length, "play: the length"),
              "t": s.when("play", after, at, beat)}
         if volume is not None:
             c["vel"] = _amount(volume, "play: volume")
@@ -910,7 +1041,7 @@ class Synth:
         return self
 
     def start(self, note=None, volume=None, *, pan=None, after=None, at=None, beat=None):
-        """Start a note that stays until it is stopped: note = lead.start("C4"), then note.stop()."""
+        """Start a note that stays until it is stopped: held = lead.start("C4"), then held.stop()."""
         s = self._sound
         s.handles = 1 if s.handles >= 0x7FFFFFF0 else s.handles + 1
         c = {"op": "note", "id": self._id, "note": None if note is None else _notes_of(note), "len": None,
@@ -929,15 +1060,15 @@ class Synth:
         return self._arp(chord, more, how, "arp", 0.5)
 
     def start_arp(self, chord=None, *more, **how):
-        """The same, staying until it is stopped: chord = lead.start_arp("Am"), chord.change("F"), chord.stop()."""
+        """The same, staying until it is stopped: arp = lead.start_arp("Am"), arp.change("F"), arp.stop()."""
         return self._arp(chord, more, how, "start_arp", None)
 
     def _arp(self, chord, more, how, said, usual):
         kind, length = how.pop("kind", None), how.pop("length", None)
-        for arg in more:       # a kind of chord (text) and a length (a number), in either order
-            if isinstance(arg, str):
+        for arg in more:       # a kind of chord (text) and a length (a number, or a note length by name), in either order
+            if isinstance(arg, str) and length_beats(arg) is None:
                 kind = arg
-            elif _is_number(arg):
+            elif isinstance(arg, str) or _is_number(arg):
                 length = arg
         speed, order = how.pop("speed", None), how.pop("order", None)
         volume, pan = how.pop("volume", None), how.pop("pan", None)
@@ -948,7 +1079,7 @@ class Synth:
         s = self._sound
         s.handles = 1 if s.handles >= 0x7FFFFFF0 else s.handles + 1
         c = {"op": "note", "id": self._id, "note": [notes[0]],
-             "len": usual if length is None else _seconds(length, "%s: the length" % said), "h": s.handles,
+             "len": usual if length is None else self._sound.length(length, "%s: the length" % said), "h": s.handles,
              "arp": _arp_of(notes, notes[0], speed, order, said), "t": s.when(said, **when)}
         if volume is not None:
             c["vel"] = _amount(volume, "%s: volume" % said)
@@ -989,13 +1120,58 @@ class Synth:
         """A tune on this synth: lead.play_notes("C4 E4 G4 - C5", 0.25, repeat=True)."""
         s = self._sound
         said = "play_notes"
-        step = 60 / s.tempo / 2 if step is None else _seconds(step, "%s: the time of a step" % said)
-        steps, length = _steps_of(notes, step, hold, volume, said)
+        # A step given in seconds makes a tune in seconds. A step by name ("eighth"), or none (an eighth), makes
+        # a tune in beats, which keeps to the tempo and changes speed when set_tempo is called as it plays.
+        in_beats = not _is_number(step)
+        if step is None:
+            step = 0.5
+        elif in_beats:
+            if length_beats(step) is None:
+                raise ValueError("%s: the time of a step needs %s, not %s" % (said, _NOT_A_LENGTH, _shown(step)))
+            step = length_beats(step)
+        else:
+            step = _seconds(step, "%s: the time of a step" % said)
+        steps, length = _steps_of(notes, step, 1 if in_beats else 60 / s.tempo, hold, volume, said)
         id = s.id("t")
         times = True if repeat is True else 1 if repeat in (None, False) else _amount(repeat, "%s: repeat" % said, 1, 1e9)
-        s.command({"op": "tune", "id": id, "synth": self._id, "steps": steps, "length": length, "repeat": times,
-                   "t": s.when(said, after, at, beat)})
+        c = {"op": "tune", "id": id, "synth": self._id, "steps": steps, "length": length, "repeat": times,
+             "t": s.when(said, after, at, beat)}
+        if in_beats:
+            c["beats"] = True
+        s.command(c)
         return Tune(s, id)
+
+    # --- a tune a line at a time
+    def note(self, what=None, length=None, *, volume=None, pan=None):
+        """The next note of this synth's line: it begins where the last one ended. lead.note("C4", "quarter"), then
+        lead.note("E4", "eighth"). The length is a note length by name or a number of beats (a quarter with nothing
+        said). A chord's name or a list of notes plays them together."""
+        if what is None:
+            raise ValueError('note needs a note, as in note("C4", "quarter"). For a silence, use rest("quarter")')
+        self._sound.write(self, _notes_of(what), length, volume, pan, "note")
+        return self
+
+    def chord(self, name=None, kind=None, length=None, *, volume=None, pan=None):
+        """The next thing in the line is a chord: lead.chord("Cm", "whole"), lead.chord("C4", "minor", "half"),
+        lead.chord(["C4", "E4", "G4"])."""
+        if kind is not None and (not isinstance(kind, str) or length_beats(kind) is not None):
+            kind, length = None, kind          # chord("Cm", "whole"): the second thing is the length
+        if name is None:
+            raise ValueError('chord needs a chord, as in chord("Cm", "whole")')
+        self._sound.write(self, chord_notes(name, kind), length, volume, pan, "chord")
+        return self
+
+    def rest(self, length=None):
+        """A silence in the line: lead.rest("quarter")."""
+        self._sound.write(self, None, length, None, None, "rest")
+        return self
+
+    def start_line(self, *, after=None, at=None, beat=None):
+        """Begin this synth's line again from now (or after=, at=, beat=): what is written next starts there."""
+        s = self._sound
+        s.line_at(self._id)
+        s.lines[self._id] = max(s.when("start_line", after, at, beat), s.turn)
+        return self
 
     # --- settings
     def set(self, settings=None, value=None, *, slide=None, after=None, at=None, beat=None, **more):
@@ -1165,6 +1341,90 @@ def play_notes(notes=None, step=None, *, repeat=None, volume=None, hold=None, af
     return _sound().main_synth().play_notes(notes, step, repeat=repeat, volume=volume, hold=hold, after=after, at=at, beat=beat)
 
 
+def note(what=None, length=None, *, volume=None, pan=None):
+    """A tune as ordinary lines, each note beginning where the last ended (on the synth play_note uses):
+    note("C4", "quarter"), note("E4", "eighth"). A length is a note length by name, or a number of beats."""
+    _sound().main_synth().note(what, length, volume=volume, pan=pan)
+
+
+def chord(name=None, kind=None, length=None, *, volume=None, pan=None):
+    """The next thing in the tune is a chord: chord("Cm", "half")."""
+    _sound().main_synth().chord(name, kind, length, volume=volume, pan=pan)
+
+
+def rest(length=None):
+    """A silence in the tune: rest("eighth")."""
+    _sound().main_synth().rest(length)
+
+
+def start_lines(*, after=None, at=None, beat=None):
+    """Begin every line of notes again together, from now (or after=, at=, beat=)."""
+    s = _sound()
+    s.lines.clear()
+    s.turn_of, s.turn = s.transport.turn(s.clock), s.when("start_lines", after, at, beat)
+
+
+class Loop:
+    """A section of notes that goes round: what loop_notes() gives back. stop() ends it."""
+
+    def __init__(self, sound, times):
+        self._sound = sound
+        self._times = times
+        self._made = []
+
+    def __enter__(self):
+        s = self._sound
+        if s.writing is not None:
+            raise ValueError("loop_notes cannot be used inside another loop_notes")
+        s.writing = {}
+        return self
+
+    def __exit__(self, kind, error, trace):
+        s = self._sound
+        written, s.writing = s.writing, None
+        if kind is not None:
+            return False
+        whole = max([line[1] for line in written.values()] or [0])
+        if not whole > 0:
+            raise ValueError("loop_notes: nothing was written to go round. Use note(), chord() and rest() inside it")
+        # Every line of the section starts together, where the latest of those lines has reached.
+        start = max(s.line_at(synth) for synth in written)
+        for synth, (steps, _) in written.items():
+            id = s.id("t")
+            self._made.append(id)
+            if steps:
+                s.command({"op": "tune", "id": id, "synth": synth, "steps": [[_whole(a), n, _whole(l), v] for a, n, l, v in steps],
+                           "length": _whole(whole), "repeat": self._times, "beats": True, "t": start})
+            s.lines[synth] = start if self._times is True else start + self._times * whole * 60 / s.tempo
+        return False
+
+    def stop(self):
+        s = self._sound
+        for id in self._made:
+            s.command({"op": "stop", "id": id, "t": s.clock()})
+        return self
+
+
+def loop_notes(a=None, b=None, *, times=None):
+    """Write a section once and have it go round, on any synths, kept in time by the sound engine and following the tempo:
+
+        with loop_notes():
+            kick.note("C3", "quarter")
+            snare.note("A3", "quarter")
+
+    loop_notes(4) goes round four times, and the lines carry on after it. A function works too: loop_notes(section),
+    loop_notes(4, section). What it gives back has stop()."""
+    section = a if callable(a) else b if callable(b) else None
+    count = times if times is not None else b if callable(a) else a
+    if count is not None and count is not True and not callable(count):
+        count = _amount(count, "loop_notes: how many times", 1, 1e9)
+    loop = Loop(_sound(), True if count is None or count is True or callable(count) else count)
+    if section is not None:
+        with loop:
+            section()
+    return loop
+
+
 def main_synth():
     """The synth that play_note and play_notes use: change it (main_synth().cutoff = 900), or tie a keyboard to it."""
     return _sound().main_synth()
@@ -1184,7 +1444,7 @@ def play_arp(chord=None, *more, **how):
 
 
 def start_arp(chord=None, *more, **how):
-    """The same, staying until it is stopped, and able to change chord: chord = start_arp("Am"), chord.change("F")."""
+    """The same, staying until it is stopped, and able to change chord: arp = start_arp("Am"), arp.change("F")."""
     return _chip()._arp(chord, more, how, "start_arp", None)
 
 
@@ -1230,8 +1490,9 @@ def sound_output():
     return s.output
 
 
-def play_sound(name=None, volume=None, *, pitch=None, pan=None, after=None, at=None, beat=None):
-    """A ready-made game sound: play_sound("coin"). The sounds: sound_names()."""
+def play_sound(name=None, volume=None, *, pitch=None, pan=None, length=None, after=None, at=None, beat=None):
+    """A ready-made game sound: play_sound("coin"). The sounds: sound_names(). length= cuts it short there, or holds
+    its last note until then."""
     found = _SOUNDS.get(_key(name)) if isinstance(name, str) else None
     if found is None:
         raise ValueError("play_sound(%s): there is no sound called %s.%s The sounds are: %s"
@@ -1245,6 +1506,8 @@ def play_sound(name=None, volume=None, *, pitch=None, pan=None, after=None, at=N
         c["pitch"] = _amount(pitch, "play_sound: pitch", -48, 48)
     if pan is not None:
         c["pan"] = _amount(pan, "play_sound: pan", -1, 1)
+    if length is not None:
+        c["len"] = s.length(length, "play_sound: length")
     s.command(c)
 
 
@@ -1374,11 +1637,12 @@ def set_tempo(bpm):
     s = _sound()
     s.tempo = _amount(bpm, "set_tempo", 20, 400)
     s.beat_zero = s.clock()
+    s.command({"op": "tempo", "bpm": s.tempo, "t": s.beat_zero})     # tunes written in beats change speed from here on
 
 
 def beats(n=1):
-    """How many seconds that many beats last."""
-    return n * 60 / _sound().tempo
+    """How many seconds that many beats last: beats(2), or a note length by name, beats("half")."""
+    return (_beats_long(n, "beats") if isinstance(n, str) else n) * 60 / _sound().tempo
 
 
 def beat():

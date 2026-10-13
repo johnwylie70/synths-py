@@ -4,8 +4,9 @@
 
 - The library: `play_sound`, `play_note`, `play_notes`, `make_synth`, `load_sample`, `play_song`, `stop_sound`, `stop_song`, `set_volume`, `mute_sound`, `unmute_sound`, `set_effects`, `set_tempo`, `beats`, `beat` and `sound_time`. The same names as synths.js, in Python's spelling.
 - A synth's settings are plain attributes (`lead.cutoff = 800`, `lead.vibrato_rate = 6`) that read back what was set. `lead.play`, `lead.start` (a note that stays, and can slide), `lead.stop`, `lead.play_notes`, `lead.set(cutoff=4000, slide=2)` and `lead.remove`.
-- Chords by name (`lead.play("Cm7")`, `chord_notes("C3", "minor")`), arpeggios (`lead.arp("Cm7")`, `lead.start_arp("Am")` with `chord.change("F")`, `play_arp`, `start_arp`) and step macros (`make_synth("chip", macro=[…])`, `lead.macro = …`).
+- Chords by name (`lead.play("Cm7")`, `chord_notes("C3", "minor")`), arpeggios (`lead.arp("Cm7")`, `arp = lead.start_arp("Am")` with `arp.change("F")`, `play_arp`, `start_arp`) and step macros (`make_synth("chip", macro=[…])`, `lead.macro = …`).
 - Songs: `song = play_song("tune.mod")` plays a `.mod`, an `.xm` or a song in synths' own format, with `pause`, `resume`, `seek`, `stop`, `song.volume` and `song.repeat`, and `patches=` for a song's instruments that are synths by name.
+- Musical time: a length may be a note length by name (`"quarter"`, `"eighth."`, `"1/16"`, a triplet), measured against `set_tempo`, wherever a length is taken, and a number is still seconds. `note`, `chord` and `rest` write a tune one line a note, each beginning where the last ended, on any synth; lines written together start together; `with loop_notes():` has a section go round, and `start_lines()` begins again. A tune with no step, or a step by name, follows the tempo as it plays.
 - `after=`, `at=` and `beat=` on everything that makes a sound.
 - Mistakes are said in plain words, with what was probably meant: a sound, synth, setting, choice, note, chord or order that does not exist.
 - The names of every sound, ready-made synth and setting are those of synths.js, carried inside the one module by `scripts/sync_names.py`.

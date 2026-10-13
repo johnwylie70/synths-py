@@ -140,6 +140,68 @@ play_note("C4", length=2, volume=0.3, pan=-1, after=0.5)   # the same things by 
 
 A chord has a name too: `"Cm"`, `"Cmaj7"`, `"Csus4"`, or a root and a kind, `chord_notes("C3", "minor")`. A letter followed by a number is always a note, so `"C7"` is the note C in octave 7; a seventh chord is `"Cdom7"`. The kinds: major, minor, dim, aug, sus2, sus4, 5, 6, m6, 7, maj7, m7, dim7, m7b5, mmaj7, add9, 9, maj9, m9 and octave.
 
+## Lengths
+
+Wherever a length is wanted there are two ways to say it, and they are never mixed up:
+
+- **A number is seconds.** `play_note("C4", 0.5)` lasts half a second, whatever the tempo.
+- **A name is a note length**, measured against the tempo: `play_note("C4", "quarter")`. At `set_tempo(120)` a quarter note is half a second; at 60 it is a whole one.
+
+| | | |
+|---|---|---|
+| `"whole"` | `"1/1"`, `"w"` | 4 beats |
+| `"half"` | `"1/2"`, `"h"` | 2 beats |
+| `"quarter"` | `"1/4"`, `"q"` | 1 beat |
+| `"eighth"` | `"1/8"`, `"e"` | half a beat |
+| `"sixteenth"` | `"1/16"`, `"s"` | a quarter of a beat |
+
+A dot makes one half as long again (`"quarter."`, `"q."`), and a triplet fits three where two were (`"eighth triplet"`, `"e3"`). Names work for the length of a note, a chord, an arpeggio or a sound (`play_sound("win", length="half")` cuts a sound short there, or holds its last note until then), for the step of a tune, and for `after="half"`. `set_tempo(140)` sets the beats in a minute (120 until you say), and `beats(3)` is how many seconds three beats last.
+
+## A tune, one note a line
+
+`play_note` plays a note **now**. `note` plays the **next** note of a tune: each one begins where the one before it ended, so a tune is written as ordinary lines of code, with loops and ifs, and no arithmetic.
+
+```python
+set_tempo(100)
+
+note("E4", "quarter")
+note("G4", "quarter")
+rest("quarter")
+note("C5", "half")
+chord("Cm", "whole")
+
+for name in ["C4", "D4", "E4"]:
+    note(name, "eighth")
+```
+
+The same tune as text, for comparison: `play_notes("E4:q G4:q -:q C5:h Cm:w C4:e D4:e E4:e")`.
+
+In a line, a length is a name, or a number of **beats** (`note("C4", 2)` is a half note); with nothing said it is a quarter. `note`, `chord` and `rest` write on the synth `play_note` uses, and every synth has its own line: `lead.note("C4", "eighth")`.
+
+- **Two lines together.** Lines written in the same go begin together, however much code is between them: write the whole melody, then the whole bass, and they start on the same instant.
+
+  ```python
+  bass = make_synth("bass")
+  for n in ["E4", "G4", "C5", "G4"]:
+      lead.note(n, "quarter")
+  bass.note("C2", "half")
+  bass.note("G2", "half")
+  ```
+
+- **A section that repeats.** A `for` loop writes a section several times. `loop_notes` has it go round for ever, kept in time by the sound engine, and it follows `set_tempo` as it plays:
+
+  ```python
+  kick, snare = make_synth("kick"), make_synth("snare")
+  with loop_notes() as drums:
+      kick.note("C3", "quarter")
+      snare.note("A3", "quarter")
+  drums.stop()
+  ```
+
+  `with loop_notes(4):` goes round four times, and the lines carry on after it. A function works too: `loop_notes(section)`.
+
+- **Starting over.** A line carries on from where it ended; if it ended a while ago, the next note begins now. `start_lines()` begins every line again from now, `start_lines(after="whole")` a bar from now, and `lead.start_line()` begins one.
+
 ## Tunes
 
 ```python
@@ -147,7 +209,7 @@ tune = play_notes("C4 E4 G4 - C5:2 G4+B4+D5 Am", 0.25, repeat=True)
 tune.stop()
 ```
 
-The notes are text with spaces between, or a list: `["C4", None, ["C4", "E4"]]`, where `None` is a rest and a list inside is a chord. In text a chord is joined with `+`, or named. The second thing is the seconds in a step; leave it out and a step is half a beat (see [When things start](#when-things-start)). More by name: `repeat` (`True`, or how many times), `volume`, `hold` (how much of its step a note sounds for, 0.9 unless you say), and `after`, `at` or `beat`.
+The notes are text with spaces between, or a list: `["C4", None, ["C4", "E4"]]`, where `None` is a rest and a list inside is a chord. In text a chord is joined with `+`, or named. The second thing is the time of a step: seconds as a number, or a note length (`"sixteenth"`); leave it out and a step is an eighth note. After a colon, a number is so many steps (`C5:2`) and a letter is a note length (`C5:h`). A tune with its step in seconds keeps that speed; one in note lengths follows `set_tempo`, even while it plays. More by name: `repeat` (`True`, or how many times), `volume`, `hold` (how much of its step a note sounds for, 0.9 unless you say), and `after`, `at` or `beat`.
 
 Every synth has `play_notes` too: `make_synth("bass").play_notes("C2 C2 G2 C2", 0.25)`.
 
@@ -167,7 +229,8 @@ What a synth does:
 |---|---|
 | `lead.play("E4", 0.5)` | a note for half a second. A list of notes, or a chord's name, is a chord. No note at all plays the synth's own (a drum's). |
 | `lead.play("E4", 0.5, 0.8)`, `lead.play("E4", length=1, volume=0.5, pan=-1, after=2)` | how loud, where, when |
-| `note = lead.start("E4")` | a note that stays until `note.stop()`. While it sounds: `note.slide_to("G4", 0.5)`, `note.pitch = "A4"`, `note.volume = 0.5`, `note.pan = -1` |
+| `held = lead.start("E4")` | a note that stays until `held.stop()`. While it sounds: `held.slide_to("G4", 0.5)`, `held.pitch = "A4"`, `held.volume = 0.5`, `held.pan = -1` |
+| `lead.note("E4", "quarter")`, `lead.chord("Cm", "half")`, `lead.rest("eighth")` | the next note of this synth's line: see [A tune, one note a line](#a-tune-one-note-a-line) |
 | `lead.stop()`, `lead.stop("E4")` | let go of every note of the synth, or of one |
 | `lead.play_notes("C4 E4 G4", 0.25)` | a tune on this synth |
 | `lead.cutoff = 800` | change a setting; notes already sounding change too |
@@ -209,9 +272,9 @@ An arpeggio plays the notes of a chord one after another, so fast that one voice
 lead.arp("Cm7")                                   # half a second of it
 lead.arp("C4", "minor", 2, speed=30, order="up-down")
 
-chord = lead.start_arp("Am")                      # one that stays
-chord.change("F")                                 # another chord, and the note carries on
-chord.stop()
+arp = lead.start_arp("Am")                        # one that stays
+arp.change("F")                                   # another chord, and the note carries on
+arp.stop()
 
 play_arp("Cm7")                                   # with no synth of your own: a chip sound
 ```
