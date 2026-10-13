@@ -27,3 +27,11 @@ def test_a_program_in_the_readme_runs(sent, code, tmp_path, monkeypatch):
 def test_the_readme_names_every_sound_and_synth():
     for name in synths.sound_names() + synths.synth_names():
         assert "`%s`" % name in README, "%s is not in the README" % name
+
+
+def test_the_readme_names_every_voice_and_every_function():
+    for name in synths.voice_names():
+        assert "`%s`" % name in README, "the voice %s is not in the README" % name
+    hosts = {"use_midi_hooks", "length_beats"}
+    for name in synths.__all__:
+        assert name in README or name in hosts, "%s is not in the README" % name

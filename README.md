@@ -2,11 +2,19 @@
 
 [![MIT licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
-synths is for making sounds and music in Python, and for enjoying it: game sounds in one line, notes and tunes, synths you shape yourself, arpeggios, recorded samples, effects and tracker songs. It is for any age and any level. You type a line and hear something. It is the sound sibling of [Pyctures](https://github.com/johnwylie70/pyctures), designed for projects made in [Circuitry Studio](https://www.circuitry.dev).
+synths is for making sounds and music in Python, and for enjoying it: game sounds in one line, notes and tunes, synths you shape yourself, arpeggios, recorded samples, effects, tracker songs, MIDI, and your own voice through a microphone, changed, recorded and saved. It is for any age and any level. You type a line and hear something. It is the sound sibling of [Pyctures](https://github.com/johnwylie70/pyctures), designed for projects made in [Circuitry Studio](https://www.circuitry.dev).
 
 Prefer JavaScript? [synths.js](https://github.com/johnwylie70/synths.js) is the same library for JavaScript, with the same names. The sound engine itself is [synths-core](https://github.com/johnwylie70/synths-core).
 
 ## Install
+
+**synths is not published yet.** It is not on PyPI, and the Pyctures that `pip install pyctures` gives today (0.2.0) has no sound in it. Until the release that has, sound runs from a checkout of Pyctures that carries it (Pyctures keeps a copy of synths inside itself):
+
+```bash
+pip install -e path/to/pyctures
+```
+
+From that release on, this is all there will be to it:
 
 ```bash
 pip install pyctures
@@ -26,7 +34,7 @@ from synths import *
 play_sound("coin")
 ```
 
-There are fourteen ready-made game sounds: `coin`, `jump`, `laser`, `shoot`, `explosion`, `hit`, `powerup`, `blip`, `click`, `zap`, `bounce`, `pop`, `win` and `lose`. In a game it is one line where the thing happens:
+There are fourteen ready-made game sounds: `coin`, `jump`, `laser`, `shoot`, `explosion`, `hit`, `powerup`, `blip`, `click`, `zap`, `bounce`, `pop`, `win` and `lose` (`sound_names()` lists them). In a game it is one line where the thing happens:
 
 ```python
 if star.touches(basket):
@@ -221,7 +229,7 @@ soft = make_synth("lead", cutoff=900)            # a ready-made one, changed
 mine = make_synth(wave="square", attack=0.2)     # one from nothing
 ```
 
-The ready-made synths: `keys` (what `play_note` uses), `bass`, `lead`, `pad`, `pluck`, `organ`, `strings`, `bell`, `flute`; the chip sounds `chip`, `chip_lead`, `chip_bass`, `chip_noise`, `chip_kick`, `chip_snare` and `chip_hat`; and the drums `kick`, `snare` and `hat`. All of them are settings of the same engine, not recordings, so every one can be changed. `synth_names()` lists them.
+The ready-made synths: `keys` (what `play_note` uses), `bass`, `lead`, `pad`, `pluck`, `organ`, `strings`, `bell`, `flute`; the chip sounds `chip`, `chip_lead`, `chip_bass`, `chip_noise`, `chip_kick`, `chip_snare` and `chip_hat`; and the drums `kick`, `snare` and `hat`. All of them are settings of the same engine, not recordings, so every one can be changed. `synth_names()` lists them, and `main_synth()` is the one `play_note` and `play_notes` use, for changing its settings or tying a dial to it.
 
 What a synth does:
 
@@ -234,7 +242,9 @@ What a synth does:
 | `lead.stop()`, `lead.stop("E4")` | let go of every note of the synth, or of one |
 | `lead.play_notes("C4 E4 G4", 0.25)` | a tune on this synth |
 | `lead.cutoff = 800` | change a setting; notes already sounding change too |
-| `lead.set(cutoff=4000, resonance=0.4)`, `lead.set(cutoff=4000, slide=2)` | change several, or slide there over two seconds |
+| `lead.set(cutoff=4000, resonance=0.4)`, `lead.set(cutoff=4000, glide=2)` | change several, or glide there over two seconds (`slide=2` is an older word for the same) |
+| `lead.voice = "robot"` | a voice changer on everything it plays: see [Your voice](#your-voice) |
+| `lead.samples()`, `lead.level()`, `lead.notes()` | what it is doing now, for a scope, a meter or lit keys you draw yourself: see [Reading the sound back](#reading-the-sound-back) |
 | `lead.arp("Cm7")` | a chord from one voice: see [Arpeggios](#arpeggios) |
 | `lead.remove()` | finished with it |
 
@@ -408,6 +418,123 @@ use_midi_output("Minilogue")             # send to this one (otherwise: the firs
 
 With no keyboard to hand, `receive_midi({"type": "noteOn", "note": 60, "velocity": 0.8, "channel": 1})` hands your program a message just as a keyboard would.
 
+## Your voice
+
+The microphone is a synth whose sound comes in instead of being made. Ask for it, give it a voice, and listen:
+
+```python
+mic = use_microphone()            # the browser asks whether the page may use the microphone
+mic.voice = "robot"               # robot, chipmunk, monster, cave, telephone, alien, whisper, or "none"
+mic.listen()                      # now you hear yourself, as a robot. mic.mute() stops it
+```
+
+**Wear headphones when you listen.** Through loudspeakers the microphone hears itself, and the sound goes round and round until it howls. That is why nothing is heard until you say `listen()`. Recording does not need it.
+
+| voice | |
+|---|---|
+| `robot` | a machine, ringing in a metal pipe |
+| `chipmunk` | small and squeaky: seven semitones higher |
+| `monster` | huge and deep: seven semitones lower, with a growl |
+| `cave` | far inside a cave: long echoes in a very big room |
+| `telephone` | down an old phone line |
+| `alien` | not from here: higher, with a slow metallic sweep |
+| `whisper` | hoarse and breathy, with no pitch at all |
+
+`voice_names()` lists them. A voice is only a handful of settings, and you can turn them yourself once it is on. A microphone has every setting a synth has, and a few words of its own:
+
+```python
+mic = use_microphone()
+mic.pitch = 7                     # semitones up or down, -12 to 12, without getting faster or slower
+mic.echo = 0.4                    # and reverb, chorus, distortion, crush, cutoff, pan, volume, as on a synth
+mic.ring = 1                      # multiply the voice by a wave: mic.ring_speed = 50 is how fast (the robot)
+mic.comb = 0.5                    # ring like a pipe at one note: mic.comb_tone = 110. mic.flanger sweeps it
+mic.gain = 2                      # turn a quiet microphone up
+mic.gate = -40                    # quieter than this (in dB) counts as silence. It starts at -50; "off" for none
+```
+
+Choosing another voice first puts back what the last one changed, so pick the voice and then turn the dials. `use_microphone("robot", listen=True, echo=0.3)` does it in one line.
+
+With [pydials](https://github.com/johnwylie70/pydials) the microphone is a synth too, and its controls act on it in the page, at once: `select("voice", mic, "voice")`, `dial("pitch", mic, "pitch")`, `toggle("listen", mic, "listening")`, `scope(mic)`, `meter(mic)`. The scope and the meter show your voice even while it is muted.
+
+### Recording
+
+```python
+take = record_sound(3)                  # three seconds of the microphone, starting now
+take.on_done(lambda: take.play())       # when it is over, play it back
+```
+
+`record_sound` gives you the recording at once and does not wait: your program carries on, and the take fills up behind it. A take is a sample, so everything a sample does it does, even while it is still recording:
+
+```python
+take = record_sound(3)
+take.play()                       # as you said it
+take.play("E4")                   # higher and faster: middle C is its own pitch
+take.reverse = True               # backwards
+take.loop = True                  # round and round while its note is held
+take.voice = "monster"            # any voice, afterwards
+take.done, take.seconds           # is it over, and how long it is
+```
+
+- What is recorded is **your plain voice**, whether or not you are listening. The take is then given the voice the microphone has, so it plays back the way the microphone sounds, and you can change your mind afterwards: `take.voice = "none"` is you, and `take.sound_like(mic)` is the microphone as it is set now.
+- `start_recording()` records until `stop_recording()`. It stops by itself after 30 seconds; `start_recording(max=60)` gives it longer, up to 120.
+- One recording is made at a time: starting another ends the one before, which keeps what it had.
+- `record_sound(3, effects=True)` records the voice after its effects instead of before. That only works while you are listening.
+
+**What is a frame late.** The page makes the recording, and tells Python about it with the next frame's message. So `take.done` and `take.seconds` change the frame *after* the recording ended, `take.on_done(...)` is called then, and `mic.state` and `mic.ready` are filled in a frame after the browser answered. Nothing in your program ever waits for any of them. In a scene that can wait (an `async def`), `await take.when_done()` and `await mic.when_ready()` look again each frame until it is so.
+
+### Recording what you play
+
+```python
+tune = record_output(10)          # everything that is played for the next ten seconds, in stereo
+play_notes("C4 E4 G4 C5", 0.25)
+save_sound(tune, "my-tune.wav")   # saved as soon as it is over
+```
+
+`lead.record(4)` records one synth alone.
+
+### Saving
+
+`save_sound(take, "hello.wav")` makes a WAV file. Where it goes:
+
+- **Run with `pyctures run`**, the file is written beside your program, a frame or two after the recording is over (the page hands Python the file).
+- **In a web page** (`pyctures build`), the browser downloads it, or the app that shows the page keeps it with the scene's other files.
+- `saved = save_sound(take, download=False)` saves nothing anywhere and hands Python the file's bytes: `saved.bytes`, once `saved.done`.
+
+It gives back at once and does not wait: `saved.done`, `saved.path` (where Python wrote it) and `saved.on_done(...)`.
+
+### With no microphone
+
+A computer with no microphone, a person who says no, a page that is not allowed to ask: none of these stops your program. Every function still works, the browser's console says once why there is no microphone and what to do about it, and a recording is simply empty and done (`take.seconds` is 0). `mic.state` is `"asking"` until the page has said, then `"on"`, or why not: `"refused"`, `"none"`, `"busy"` or `"unavailable"`. `mic.ready` is `None` while it is asking, then `True` or `False`, and `mic.on_ready(fn)` calls your function with that. `stop_microphone()` lets the microphone go, and the browser's recording light goes out.
+
+A page has to be served over `https` or from `localhost` to be given a microphone (`pyctures run` is), and a page inside a frame needs `allow="microphone"` on the frame.
+
+### The voice effects on a synth
+
+The pitch shifter, the ring modulator and the comb are not only for voices. Every synth has them, under names that do not clash with its own `pitch` and `ring`:
+
+```python
+lead.pitch_shift = 12             # an octave up, with the same length
+lead.ring_mod = 0.6               # bell-like and strange: lead.ring_speed = 300
+lead.comb = 0.5                   # a metal pipe: lead.comb_tone, lead.comb_feedback
+lead.flanger = 0.6                # the comb, sweeping: lead.flanger_rate
+lead.voice = "robot"              # or a whole voice at once
+```
+
+Eight synths can use the pitch shifter or the comb at once.
+
+## Reading the sound back
+
+For a scope, a meter or lit keys that your own program draws:
+
+```python
+lead.play("C4", 2)
+wave = lead.samples()             # the wave it is making: about a thousand numbers from -1 to 1
+loud = lead.level()               # how loud it is, [left, right], each from 0 to 1
+held = lead.notes()               # the notes it is sounding, as numbers
+```
+
+`sound_output()` has the same three for everything that is sounding, the microphone has them for your voice, and a song has them a channel at a time: `song.channel(3).level()`. They are **a frame late**: Python cannot ask the page and be answered, so the first call asks the page to start saying, and from the next frame on each call gives what the page said with that frame. The very first call gives an empty list, zeros and no notes. The page stops saying a second and a half after your program stops asking. (With pydials, `scope(lead)` and `meter(lead)` are drawn by the page itself and are not late at all.)
+
 ## Volume, mute and stop
 
 ```python
@@ -430,7 +557,18 @@ song.seek(2)                          # jump to the third part of the song (and 
 song.stop()
 ```
 
-`play_song("tune.xm", repeat=False)` plays it once, and `volume=0.6` starts it quieter. One song plays at a time, and your own notes and game sounds play over it.
+`play_song("tune.xm", repeat=False)` plays it once, and `volume=0.6` starts it quieter. One song plays at a time, and your own notes and game sounds play over it. `stop_song()` stops whichever song is playing.
+
+A song is made of channels, counted from 0, and of patterns it plays in turn:
+
+```python
+song = play_song("tune.mod")
+song.mute(2)                          # silence channel 2. song.mute(2, False) or song.unmute(2) brings it back
+song.solo(0)                          # hear only the channels that are soloed. song.solo("all", False) hears the rest again
+song.loop_pattern()                   # stay on the pattern that is playing. song.loop_pattern(False) carries on
+```
+
+`song.position` says where the song is, for drawing it: `{"state", "order", "pattern", "row", "tick", "speed", "tempo", "rounds", "rows", "orders"}`, where `state` is `"playing"`, `"paused"`, `"stopped"` or `"none"`. Like everything read back it is [a frame late](#reading-the-sound-back), and `"none"` the first time it is read. `song.replace(edited)` puts an edited song in the place of the one playing, for an editor: its bytes, its JSON as text, or the song as a dictionary. When the two have the same shape nothing stops, and the change is heard from the next row.
 
 In a song of synths' own, an instrument can be a synth instead of a recording, called by a name. A name that is a ready-made synth's (`"bass"`, `"chip_kick"`) plays as that; any other name is told what it is:
 
@@ -448,6 +586,7 @@ A mistake is said in plain words, with what was probably meant, on the line that
 play_sound("lazer"): there is no sound called "lazer". Did you mean "laser"? The sounds are: coin, jump, laser, …
 make_synth(): there is no setting called "cutof". Did you mean "cutoff"?
 "H4" is not a note. Write a note as a name like "C4", "F#3" or "Bb5", or as a number, where 60 is middle C
+"robt" is not a voice. Did you mean "robot"? The voices are: robot, chipmunk, monster, cave, telephone, alien, whisper, and "none"
 ```
 
 ## How it works
@@ -461,6 +600,7 @@ How the commands travel:
 - **In a Pyctures scene** they ride the frame's own message. The first sound of a frame adds one command to the frame, a call of `send(batch)` on the page's sound object (Pyctures' fixed handle 10), and the rest of that frame's sounds join the batch. It is the same in a browser's own Python (`pyctures build`), in your Python (`pyctures run`), and with Python on another computer. Sound asked for at the top of the file, in `setup()` or in `on_key_down()` is inside the same call from the page, so it leaves with that call's reply.
 - **A host of its own** calls `synths.connect(send)` and is handed each command at once, as `{"synths": 1, "now": …, "cmds": […]}`.
 - **MIDI** goes the same way. Its functions write a `midi` command into the same batches ([docs/midi.md](https://github.com/johnwylie70/synths.js/blob/main/docs/midi.md) of synths.js is the contract); the page, where the devices are, plays a synth from a keyboard and turns a setting from a knob without Python in between; and what was received comes back as plain data. In a Pyctures scene the page hands it over with the next frame, each message with its own time moved onto Python's clock. A host of its own gives `synths.receive_midi(events)` what its player's `onMidi` gave.
+- **The microphone, recording and saving** are `mic`, `record` and `save` commands in the same batches ([docs/microphone.md](https://github.com/johnwylie70/synths.js/blob/main/docs/microphone.md) of synths.js is the contract). The page opens the microphone, where the person is asked, and a dial tied to it acts on it there. What the player says back (the microphone is on or is not, a recording is over, a file is saved) and what is read back (a synth's wave, level and notes, a song's place) come as plain data with the next frame. A host of its own gives `synths.receive_sound_events(events)` what its player's `onSoundEvents` gave.
 - **Plain Python** has no player: the program is started again with `pyctures run`, or says how to.
 
 The names of every sound, synth and setting are those of synths.js, carried inside the module: `python scripts/sync_names.py` copies them from its `synths-names.json`, and a test fails while the two differ.
@@ -472,7 +612,7 @@ pip install pytest
 pytest
 ```
 
-They need no browser and make no sound: they check the names against synths.js, every command against the command format, and what a mistake says. The tests that listen (a scene heard under `pyctures run` and in a built page, with dials and a keyboard) are in Pyctures.
+They need no browser and make no sound: they check the names against synths.js, every command against the command format, and what a mistake says. The tests of the microphone and the voices listen without one: where [node](https://nodejs.org) and synths.js are beside this repository, synths.js's offline player renders Python's commands with a tone in a microphone's place, and the pitch, the length of a recording and a saved WAV file are measured (they are skipped otherwise). The tests that listen (a scene heard under `pyctures run` and in a built page, with dials and a keyboard) are in Pyctures.
 
 ## Licence
 
