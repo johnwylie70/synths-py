@@ -2769,7 +2769,7 @@ class _Midi:
                 for fn in list(self.on["devices"]):
                     _call(fn, self.devices_now())
                 for port in list(self.ports.values()):
-                    port._changed("device")
+                    port._devices_changed()
             elif kind == "set":
                 # A knob turned a setting on the page: the synth here is told, so that reading it back gives what it is.
                 b = self.bound.get(m.get("id"), {}).get(_key(m.get("setting")))
@@ -3085,6 +3085,7 @@ class MidiPort:
     def __init__(self, midi, which, synth):
         self._midi, self._which, self._synth = midi, which, synth
         self._device, self._channel, self._heard = None, None, []
+        self._told = None        # the name the page was last told, which is None while the chosen device is away
         self.names = list(_NAMES["midi"].get("choices", {}).get("settings", ("device", "channel")))
 
     def _words(self):
@@ -3108,7 +3109,7 @@ class MidiPort:
             return none
         if self._device in known:
             return self._device
-        return every if self._which == "input" else known[0]
+        return every if self._which == "input" else known[0]       # (a chosen device that is away reads as what is used meanwhile)
 
     def describe(self, setting):
         every, none, unavailable = self._words()
@@ -3137,7 +3138,10 @@ class MidiPort:
             if value is not None and not isinstance(value, str):
                 raise ValueError("midi_%s: device needs the name of a MIDI device, not %s" % (self._which, _shown(value)))
             self._device = None if value in (None, every, none, unavailable) else value
-            c["name"] = self._device
+            known, available = self._devices()
+            # The page is told a name only while that device is there (or before it has said what is there).
+            self._told = self._device if self._device in known or available is None else None
+            c["name"] = self._told
         else:
             raise ValueError('midi_%s has "device" and "channel", and no %s' % (self._which, _shown(setting)))
         if self._synth is not None:
@@ -3153,12 +3157,28 @@ class MidiPort:
         return lambda: self._heard.remove(fn) if fn in self._heard else None
 
     def _chosen(self, name):
-        self._device = name
+        self._device = self._told = name
         self._changed("device")
 
     def _changed(self, name):
         for fn in list(self._heard):
             _call(fn, name)
+
+    def _devices_changed(self):
+        """The devices came or went. A chosen device that is pulled out falls back, which is said once, and is
+        chosen again when it returns: falling back is the sender's work (synths.js's docs/midi.md)."""
+        known, available = self._devices()
+        want = self._device if self._device in known else None
+        if want != self._told:
+            if want is None:
+                _tell("the MIDI %s %s is not there any more, so %s is used. It will be chosen again if it comes back."
+                      % (self._which, _shown(self._device), "every input" if self._which == "input" else "the first output"))
+            self._told = want
+            c = {"do": self._which, "name": want}
+            if self._synth is not None:
+                c["id"] = self._synth._id
+            self._midi.command(c)
+        self._changed("device")
 
     device = property(lambda self: self.get("device"), lambda self, value: self.set("device", value))
     channel = property(lambda self: self._channel or (self._words()[0] if self._which == "input" else 1),
@@ -3167,12 +3187,18 @@ class MidiPort:
     def level(self):
         """How hard the last note was hit, fading away: from 0 to 1, for a meter that is an activity light. It
         follows the notes Python has been handed, so only while the program listens (on_midi_note, on_midi)."""
+        if self._which != "input":
+            return 0
+        self._midi.listen()
         hit, when = self._midi.last
-        return max(0.0, hit * (1 - (self._midi.sound.clock() - when) / 0.4)) if self._which == "input" else 0
+        return hit * 0.5 ** ((self._midi.sound.clock() - when) / 0.09)       # halving every 90 ms
 
     def notes(self):
         """The keys held down now, as numbers, from the notes Python has been handed."""
-        return sorted(self._midi.held) if self._which == "input" else []
+        if self._which != "input":
+            return []
+        self._midi.listen()
+        return sorted(self._midi.held)
 
 
 def _midi_port(which, synth):

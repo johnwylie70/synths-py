@@ -271,6 +271,14 @@ def test_the_device_and_channel_as_a_target_for_a_select(sent):
     mine = [{k: v for k, v in c.items() if k not in ("op", "t")} for c in sent if c.get("do") in ("input", "output")]
     assert mine == [{"do": "input", "name": "Pads"}, {"do": "input", "channel": 2}, {"do": "input", "name": "Keys"},
                     {"do": "input", "name": None}, {"do": "input", "channel": 3, "id": lead._id}, {"do": "output", "channel": 10}]
+    del sent[:]
+    # A chosen device that is pulled out falls back, and is chosen again when it returns.
+    port.device = "Pads"
+    receive_midi({"type": "devices", "inputs": ["Keys"], "outputs": ["Box"], "available": True})
+    assert port.device == words["all"] and sent[-1]["do"] == "input" and sent[-1]["name"] is None
+    receive_midi({"type": "devices", "inputs": ["Keys", "Pads"], "outputs": ["Box"], "available": True})
+    assert port.device == "Pads" and sent[-1]["name"] == "Pads"
+    port.device = words["all"]
     receive_midi({"type": "devices", "inputs": [], "outputs": [], "available": False})
     assert port.device == words["unavailable"] and out.describe("device")["choices"] == [words["unavailable"]]
     receive_midi([{"type": "noteOn", "note": 60, "velocity": 0.5, "channel": 1}])
