@@ -42,6 +42,12 @@ song.loopPattern()
 song.loop_pattern(false)
 song.replace({ title: 'x' })
 song.replace('{"title":"y"}')
+lead.sample = part
+lead.wave = 'saw'
+const bare = s.makeSynth('bass')
+bare.wave = 'sample'
+const keys = s.makeSynth({ sample: 'piano.wav', note: 'C4', cutoff: 1800 })
+keys.set({ sample: 'other.wav', wave: 'sample' })
 s.stopMicrophone()
 await new Promise((yes) => setTimeout(yes, 0))
 s.flush()

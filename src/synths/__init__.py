@@ -466,7 +466,67 @@ def _wear_voice(worn, patch, name):
 
 def _sendable(given):
     """Settings as they are sent: as written, with a sample given as its id."""
-    return {name: (value._sample or value._id) if isinstance(value, Synth) else value for name, value in given.items()}
+    return {name: (value._sample or value._id) if isinstance(value, (Synth, _Slot)) else value for name, value in given.items()}
+
+
+class _Slot:
+    """A sample by its id alone, among a synth's settings: one loaded from a file named there."""
+
+    def __init__(self, id):
+        self._sample = self._id = id
+
+
+def _sample_file(s, path, note=None, loop=None):
+    """A sound file as a sample: the command that loads it is written, and the id it goes by given back."""
+    sid = s.id("w")
+    c = {"op": "sample", "id": sid, "name": path}
+    if note is not None:
+        c["note"] = note_number(note)
+    if loop:
+        c["loop"] = list(loop) if isinstance(loop, (list, tuple)) else True
+    data = _file(path)
+    if data is not None:
+        c["bytes"] = data       # Python has the file (it may be on another computer than the page)
+    else:
+        c["url"] = path         # the page fetches it from beside the scene
+    s.command(c)
+    return sid
+
+
+def _with_samples(s, given, patch, said, note=None, loop=None):
+    """SAMPLES AMONG A SYNTH'S SETTINGS, as synths.js has them. `sample` is a sample from load_sample, a recording,
+    or the name of a sound file (which is loaded); giving one turns that oscillator's wave to "sample" unless a
+    wave is said too, so lead.sample = load_sample("piano.wav") is all it takes to put a recording under a synth's
+    filter and envelope. The wave "sample" with no sample to play is not set: it is said once, and the wave stays."""
+    out = dict(given)
+
+    def names(which):
+        return [n for n in out if (_setting(n) or {}).get("name") == which]
+    for name, value in given.items():
+        entry = _setting(name)
+        if entry is None or not entry["name"].endswith(".sample"):
+            continue
+        if isinstance(value, str) and value.strip():
+            out[name] = _Slot(_sample_file(s, value, note, loop))
+        elif not (isinstance(value, (Synth, _Slot)) and value._sample):
+            raise ValueError('%s: sample needs a sample from load_sample, a recording, or the name of a sound file, as in '
+                             'lead.sample = load_sample("piano.wav"), not %s' % (said, _shown(value)))
+        wave = entry["name"].replace("sample", "wave")
+        if not names(wave):
+            out[wave] = "sample"
+    for which in ("osc1", "osc2"):
+        for name in names(which + ".wave"):
+            value = out[name]
+            if not (value == 4 and not isinstance(value, bool) or (isinstance(value, str) and value.lower().strip() == "sample")):
+                continue
+            if _setting(which + ".sample")["id"] in patch or names(which + ".sample"):
+                continue
+            wave = _setting(which + ".wave")
+            now = wave["choices"][int(patch.get(wave["id"], wave["default"]))]
+            _tell('%s = "sample" needs a sample to play, and this synth has none, so its wave stays %s. Give it one first: '
+                  'lead.sample = load_sample("piano.wav"), or make_synth(sample="piano.wav").' % (name, _shown(now)))
+            del out[name]
+    return out
 
 
 _SEMITONES = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}
@@ -1504,7 +1564,7 @@ class Synth:
                 self._wear(value, at)
             else:
                 out[self._name(name)] = value
-        return out
+        return _with_samples(self._sound, out, self._patch, "set")
 
     def get(self, name):
         """A setting by its name: lead.get("cutoff") is lead.cutoff."""
@@ -1589,6 +1649,11 @@ class Synth:
              "max": entry["max"] / entry["scale"], "default": entry["default"] / entry["scale"]}
         if entry.get("choices"):
             d["choices"] = list(entry["choices"])
+            # "sample" is a wave only for a synth that has been given a sample to play.
+            holds = _setting(entry["name"].replace("wave", "sample")) if entry["name"] in ("osc1.wave", "osc2.wave") else None
+            if holds is not None and holds["id"] not in getattr(self, "_patch", {}):
+                d["choices"] = [c for c in d["choices"] if c != "sample"]
+                d["max"] = len(d["choices"]) - 1
         unit = "octaves" if entry["scale"] == 12 else entry.get("unit")
         if _UNITS.get(unit):
             d["unit"] = _UNITS[unit]
@@ -1672,6 +1737,10 @@ def _make_synth(s, preset, settings):
     patch = _patch_of(_NAMES["plain"], said, False)
     made = _NAMES["synths"][preset] if preset else {}
     _patch_of(made, said, False, patch)
+    # With a sound file for its sample, `note` and `loop` are the recording's: the note it is at, and whether it goes round.
+    file = isinstance(settings.get("sample"), str)
+    note, loop = (settings.pop("note", None), settings.pop("loop", None)) if file else (None, None)
+    settings = _with_samples(s, settings, patch, said, note, loop)
     _patch_of(settings, said, True, patch)
     id = s.id("s")
     c = {"op": "synth", "id": id, "t": s.clock()}
@@ -1682,7 +1751,7 @@ def _make_synth(s, preset, settings):
     if macro is not _nothing:
         c["macro"] = macro or None
     s.command(c)
-    synth = Synth(s, id, patch, made.get("note", 60), 0.3)
+    synth = Synth(s, id, patch, made.get("note", 60 if note is None else note_number(note)), 0.3)
     object.__setattr__(synth, "_macro", made.get("macro") if macro is _nothing else macro or None)
     return synth
 
@@ -1726,21 +1795,11 @@ def load_sample(path=None, note=None, loop=None, **settings):
     patch = _patch_of(_NAMES["plain"], said, False)
     _patch_of(_NAMES["synths"].get("sample"), said, False, patch)
     _patch_of(settings, said, True, patch)
-    sid = s.id("w")
-    c = {"op": "sample", "id": sid, "name": path}
-    if note is not None:
-        c["note"] = note_number(note)
-    if loop:
-        c["loop"] = list(loop) if isinstance(loop, (list, tuple)) else True
-    data = _file(path)
-    if data is not None:
-        c["bytes"] = data       # Python has the file (it may be on another computer than the page)
-    else:
-        c["url"] = path         # the page fetches it from beside the scene
-    s.command(c)
+    patch[_setting("sample")["id"]] = 0
+    sid = _sample_file(s, path, note, loop)
     id = s.id("s")
     s.command({"op": "synth", "id": id, "preset": "sample", "set": dict(_sendable(settings), sample=sid), "t": s.clock()})
-    synth = Synth(s, id, patch, c.get("note", 60), None)
+    synth = Synth(s, id, patch, 60 if note is None else note_number(note), None)
     object.__setattr__(synth, "_sample", sid)
     return synth
 
@@ -2427,6 +2486,7 @@ def _record_from(s, o, said):
     s.command({"op": "synth", "id": sid, "preset": "sample", "set": {"sample": wid}, "t": s.clock()})
     patch = _patch_of(_NAMES["plain"], said, False)
     _patch_of(_NAMES["synths"].get("sample"), said, False, patch)
+    patch[_setting("sample")["id"]] = 0
     take = Take(s, sid, patch, wid)
     if loop:
         object.__setattr__(take, "_loop", c["loop"])

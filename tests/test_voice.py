@@ -91,6 +91,12 @@ def test_the_same_program_writes_the_same_commands_as_synths_js(sent, tmp_path):
     song.loop_pattern(False)
     song.replace({"title": "x"})
     song.replace('{"title":"y"}')
+    lead.sample = part
+    lead.wave = "saw"
+    bare = make_synth("bass")
+    bare.wave = "sample"             # it has no sample: said once, and not sent
+    keys = make_synth(sample="piano.wav", note="C4", cutoff=1800)
+    keys.set(sample="other.wav", wave="sample")
     stop_microphone()
 
     def same(c):
@@ -104,6 +110,10 @@ def test_the_same_program_writes_the_same_commands_as_synths_js(sent, tmp_path):
     theirs = [same(c) for c in theirs if c["op"] != "save"]      # synths.js saves a recording when it is over
     assert ours == theirs
     assert part._sample == "w7"
+    assert lead.wave == "saw" and bare.wave != "sample" and keys.wave == "sample"
+    assert "sample" in keys.describe("wave")["choices"] and "sample" not in bare.describe("wave")["choices"]
+    assert "sample" in take.describe("wave")["choices"]
+    assert len([w for w in synths._said if "needs a sample to play" in w]) == 1
 
 
 # ---------------------------------------------------------------- what is written

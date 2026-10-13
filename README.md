@@ -329,6 +329,13 @@ hum.play("E4", 2)
 
 There is nothing to wait for: play it straight away, and it sounds as soon as the file has arrived.
 
+A sample can also be the wave of any synth, under its filter and its envelope:
+
+```python
+lead.sample = load_sample("piano.wav")                    # its wave is now "sample"; lead.wave = "saw" goes back
+keys = make_synth(sample="piano.wav", note="C4", cutoff=1800, release=0.6)   # or all in one line: note is the note the recording is at
+```
+
 ## When things start
 
 Everything that makes a sound takes one of these:
