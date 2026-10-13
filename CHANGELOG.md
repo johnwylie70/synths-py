@@ -17,6 +17,7 @@
 - `lead.set(cutoff=4000, glide=2)`: `glide` is the word for sliding a setting, and `slide` still works.
 - With no microphone nothing is raised: the page says why once, and a recording is empty.
 - A sample as the wave of any synth: `lead.sample = load_sample("piano.wav")`, or `make_synth(sample="piano.wav", note="C4")`, which loads the file. The wave `"sample"` is offered only for a synth that has one.
+- `midi_input()`, `lead.midi_input()` and `midi_output()`: the MIDI device and channel as a target with `"device"` and `"channel"`, for a select on the screen.
 - `synths.receive_sound_events(events)` hands a program what a host's player said back.
 - `after=`, `at=` and `beat=` on everything that makes a sound.
 - Mistakes are said in plain words, with what was probably meant: a sound, synth, setting, choice, note, chord or order that does not exist.

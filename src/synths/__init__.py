@@ -90,7 +90,7 @@ __all__ = ["play_sound", "play_note", "play_notes", "make_synth", "load_sample",
            "length_beats",
            "on_midi", "on_midi_note", "on_midi_note_off", "on_midi_control", "on_midi_devices", "use_midi_hooks",
            "send_midi", "send_midi_note", "send_midi_note_off", "send_midi_control", "send_midi_bend",
-           "send_midi_program", "send_midi_clock", "midi_devices", "use_midi_input", "use_midi_output",
+           "send_midi_program", "send_midi_clock", "midi_devices", "use_midi_input", "use_midi_output", "midi_input", "midi_output",
            "receive_midi", "stop_midi",
            "use_microphone", "stop_microphone", "record_sound", "start_recording", "stop_recording",
            "record_output", "save_sound", "receive_sound_events", "voice_names"]
@@ -1705,6 +1705,14 @@ class Synth:
         self._sound.midi.turn(self, "learn", setting, on_change, min, max, channel)
         return self
 
+    def midi_input(self):
+        """The device and the channel this synth plays from, for a select on the screen: see midi_input()."""
+        return _midi_port("input", self)
+
+    def midi_output(self):
+        """Where this synth's notes go when it sends them on, for a select on the screen: see midi_output()."""
+        return _midi_port("output", self)
+
     def unmap_midi(self, setting=None):
         """No knob turns this setting any more: lead.unmap_midi("cutoff"). With no name: none of this synth's."""
         self._sound.midi.unmap(self, setting)
@@ -2675,6 +2683,9 @@ class _Midi:
         self.clock_on = False
         self.bound = {}          # synth id -> setting -> [the synth, a function to call with each new value]
         self.hooked = set()      # the scene's own functions already taken by use_midi_hooks
+        self.ports = {}          # (which, a synth's id or None) -> what midi_input() and midi_output() gave
+        self.held = {}           # an input's notes held down now: note -> how hard
+        self.last = [0, 0]       # how hard the last note was hit, and when
 
     # Every MIDI call sends a command (which is what has the page ask for permission) and makes sure this
     # program is handed what the page's desk says.
@@ -2717,6 +2728,8 @@ class _Midi:
                 # With no MIDI (`available` False) the page has said why, once, in its console; nothing more is said here.
                 for fn in list(self.on["devices"]):
                     _call(fn, self.devices_now())
+                for port in list(self.ports.values()):
+                    port._changed("device")
             elif kind == "set":
                 # A knob turned a setting on the page: the synth here is told, so that reading it back gives what it is.
                 b = self.bound.get(m.get("id"), {}).get(_key(m.get("setting")))
@@ -2725,9 +2738,12 @@ class _Midi:
                     if b[1] is not None:
                         _call(b[1], b[0].get(m.get("setting")), m.get("setting"))
             elif kind == "noteOn":
+                self.held[m.get("note")] = m.get("velocity") or 0
+                self.last = [m.get("velocity") or 0, self.sound.clock()]
                 for fn in list(self.on["note"]):
                     _call(fn, m.get("note"), m.get("velocity"), m.get("channel"))
             elif kind == "noteOff":
+                self.held.pop(m.get("note"), None)
                 if self.on["note_off"]:
                     for fn in list(self.on["note_off"]):
                         _call(fn, m.get("note"), m.get("channel"))
@@ -2838,6 +2854,9 @@ class _Midi:
                       % (said, _shown(n), which, _shown(n),
                          "The %ss are: %s" % (which, ", ".join(_shown(k) for k in known)) if known else "No MIDI %s is plugged in" % which))
         self.command({"do": which, "name": list(name) if many else name})
+        port = self.ports.get((which, None))
+        if port is not None:
+            port._chosen(name if isinstance(name, str) else None)
 
     def stop(self):
         for fns in self.on.values():
@@ -3014,6 +3033,127 @@ def use_midi_input(name=None):
 def use_midi_output(name=None):
     """Send to one output by its name, instead of the first: use_midi_output("Minilogue"). No name: the first again."""
     _sound().midi.choose("output", name, "use_midi_output")
+
+
+class MidiPort:
+    """The MIDI device and the channel as a TARGET, which a select on the screen is tied to as a dial is tied to
+    a synth: what midi_input(), lead.midi_input() and midi_output() give. It has two settings, "device" and
+    "channel": port.get("device"), port.set("channel", 2), port.describe("device")["choices"], and port.device
+    and port.channel as attributes. The choices follow what is plugged in, which the page says a frame late: until
+    it has, a device reads "no devices". port.on_change(fn) calls fn(name) when a value or the choices change."""
+
+    def __init__(self, midi, which, synth):
+        self._midi, self._which, self._synth = midi, which, synth
+        self._device, self._channel, self._heard = None, None, []
+        self.names = list(_NAMES["midi"].get("choices", {}).get("settings", ("device", "channel")))
+
+    def _words(self):
+        w = _NAMES["midi"].get("choices", {})
+        return w.get("all", "all"), w.get("none", "no devices"), w.get("unavailable", "no MIDI here")
+
+    def _devices(self):
+        d = self._midi.devices
+        return list(d[self._which + "s"]), d["available"]
+
+    def get(self, setting):
+        every, none, unavailable = self._words()
+        if _key(setting) == "channel":
+            return str(self._channel) if self._channel else every if self._which == "input" else "1"
+        if _key(setting) != "device":
+            return None
+        known, available = self._devices()
+        if available is False:
+            return unavailable
+        if not known:
+            return none
+        if self._device in known:
+            return self._device
+        return every if self._which == "input" else known[0]
+
+    def describe(self, setting):
+        every, none, unavailable = self._words()
+        numbers = [str(n) for n in range(1, 17)]
+        if _key(setting) == "channel":
+            return {"name": "channel", "kind": "text", "choices": [every] + numbers if self._which == "input" else numbers,
+                    "default": every if self._which == "input" else "1"}
+        if _key(setting) != "device":
+            return None
+        known, available = self._devices()
+        choices = [unavailable] if available is False else [none] if not known else ([every] + known if self._which == "input" else known)
+        return {"name": "device", "kind": "text", "choices": choices, "default": choices[0]}
+
+    def set(self, setting, value):
+        every, none, unavailable = self._words()
+        c = {"do": self._which}
+        if _key(setting) == "channel":
+            if value is None or value == every:
+                self._channel = None
+            else:
+                number = int(value) if isinstance(value, str) and value.strip().isdigit() else value
+                self._midi.channel(number, "midi_%s: channel" % self._which)      # 1 to 16, or it says so
+                self._channel = number
+            c["channel"] = self._channel
+        elif _key(setting) == "device":
+            if value is not None and not isinstance(value, str):
+                raise ValueError("midi_%s: device needs the name of a MIDI device, not %s" % (self._which, _shown(value)))
+            self._device = None if value in (None, every, none, unavailable) else value
+            c["name"] = self._device
+        else:
+            raise ValueError('midi_%s has "device" and "channel", and no %s' % (self._which, _shown(setting)))
+        if self._synth is not None:
+            c["id"] = self._synth._id
+        self._midi.command(c)
+        self._changed(_key(setting))
+        return self
+
+    def on_change(self, fn):
+        if not callable(fn):
+            raise ValueError("on_change needs a function to call, as in on_change(lambda name: ...), not %s" % _shown(fn))
+        self._heard.append(fn)
+        return lambda: self._heard.remove(fn) if fn in self._heard else None
+
+    def _chosen(self, name):
+        self._device = name
+        self._changed("device")
+
+    def _changed(self, name):
+        for fn in list(self._heard):
+            _call(fn, name)
+
+    device = property(lambda self: self.get("device"), lambda self, value: self.set("device", value))
+    channel = property(lambda self: self._channel or (self._words()[0] if self._which == "input" else 1),
+                       lambda self, value: self.set("channel", value))
+
+    def level(self):
+        """How hard the last note was hit, fading away: from 0 to 1, for a meter that is an activity light. It
+        follows the notes Python has been handed, so only while the program listens (on_midi_note, on_midi)."""
+        hit, when = self._midi.last
+        return max(0.0, hit * (1 - (self._midi.sound.clock() - when) / 0.4)) if self._which == "input" else 0
+
+    def notes(self):
+        """The keys held down now, as numbers, from the notes Python has been handed."""
+        return sorted(self._midi.held) if self._which == "input" else []
+
+
+def _midi_port(which, synth):
+    m = _sound().midi if synth is None else synth._sound.midi
+    key = (which, synth._id if synth is not None else None)
+    if key not in m.ports:
+        m.ports[key] = MidiPort(m, which, synth)
+        m.ask()
+    return m.ports[key]
+
+
+def midi_input():
+    """The MIDI device and channel listened to, as something a control is tied to: select("device", midi_input(),
+    "device") and select("channel", midi_input(), "channel"). It is the choice use_midi_input makes in code.
+    lead.midi_input() is the same for what plays one synth alone. See MidiPort."""
+    return _midi_port("input", None)
+
+
+def midi_output():
+    """The MIDI device and channel sent to, as something a control is tied to: select("device", midi_output(), "device")."""
+    return _midi_port("output", None)
 
 
 def receive_midi(events):

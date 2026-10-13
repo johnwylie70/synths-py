@@ -246,3 +246,36 @@ def test_in_a_scene_midi_rides_the_frame_and_comes_back_with_the_next(pyctures):
     reply = json.loads(pyctures.tick(json.dumps({"events": [{"k": "cb", "id": listener, "e": {"midi": json.dumps(events)}}]})))
     assert reply["out"] == "(64, 0.5, 1) 440\n" and not reply["error"], reply
     assert calls(json.dumps(reply)) == [], "nothing is written back for what the page has already done"
+
+
+def test_the_device_and_channel_as_a_target_for_a_select(sent):
+    words = synths._NAMES["midi"]["choices"]
+    port = midi_input()
+    assert midi_input() is port and port.names == words["settings"]
+    assert port.get("device") == words["none"] and port.describe("device")["choices"] == [words["none"]]
+    assert port.get("channel") == words["all"] and port.describe("channel")["choices"] == [words["all"]] + [str(n) for n in range(1, 17)]
+    changed = []
+    port.on_change(changed.append)
+    receive_midi({"type": "devices", "inputs": ["Keys", "Pads"], "outputs": ["Box"], "available": True})
+    assert port.describe("device")["choices"] == [words["all"], "Keys", "Pads"] and port.device == words["all"] and changed == ["device"]
+    port.set("device", "Pads")
+    port.channel = 2
+    use_midi_input("Keys")                       # the same choice, made in code
+    assert port.device == "Keys" and port.channel == 2 and port.get("channel") == "2"
+    port.set("device", words["all"])
+    lead = make_synth("lead")
+    lead.midi_input().channel = "3"
+    out = midi_output()
+    assert out.device == "Box" and out.describe("channel")["choices"][0] == "1"
+    out.set("channel", 10)
+    mine = [{k: v for k, v in c.items() if k not in ("op", "t")} for c in sent if c.get("do") in ("input", "output")]
+    assert mine == [{"do": "input", "name": "Pads"}, {"do": "input", "channel": 2}, {"do": "input", "name": "Keys"},
+                    {"do": "input", "name": None}, {"do": "input", "channel": 3, "id": lead._id}, {"do": "output", "channel": 10}]
+    receive_midi({"type": "devices", "inputs": [], "outputs": [], "available": False})
+    assert port.device == words["unavailable"] and out.describe("device")["choices"] == [words["unavailable"]]
+    receive_midi([{"type": "noteOn", "note": 60, "velocity": 0.5, "channel": 1}])
+    assert port.notes() == [60] and 0 < port.level() <= 0.5
+    receive_midi([{"type": "noteOff", "note": 60, "channel": 1}])
+    assert port.notes() == []
+    with pytest.raises(ValueError, match="channel needs a whole number from 1 to 16"):
+        port.set("channel", 40)

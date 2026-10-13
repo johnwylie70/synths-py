@@ -421,6 +421,8 @@ use_midi_input("Keystation 49")          # listen to this one alone (otherwise: 
 use_midi_output("Minilogue")             # send to this one (otherwise: the first)
 ```
 
+To choose on the screen instead, `midi_input()` and `midi_output()` are things a pydials control is tied to, with a `"device"` and a `"channel"`: `select("device", midi_input(), "device")`. `lead.midi_input()` is the same for one synth alone. The choices follow what is plugged in, which the page says a frame late.
+
 `midi_devices()` gives the same `{"inputs": [...], "outputs": [...], "available": ...}` at any time, but the page has to be asked and its answer comes with a later frame: the first call gives empty lists with `available` as `None`. That is why `on_midi_devices` is there (in a scene, `def on_midi_devices(devices):`). `available` is `False` when there is no MIDI. `stop_midi()` forgets every function you gave and stops everything MIDI is doing.
 
 With no keyboard to hand, `receive_midi({"type": "noteOn", "note": 60, "velocity": 0.8, "channel": 1})` hands your program a message just as a keyboard would.
