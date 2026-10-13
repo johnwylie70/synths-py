@@ -19,12 +19,13 @@ FORMAT = {
     "voice": {"id": str, "h": int, "pitch": NUMBER, "freq": NUMBER, "glide": NUMBER, "vol": NUMBER, "pan": NUMBER, "kill": bool, "arp": (dict, type(None))},
     "sound": {"name": str, "vol": NUMBER, "pitch": NUMBER, "pan": NUMBER, "len": NUMBER},
     "tempo": {"bpm": NUMBER},
-    "sample": {"id": str, "url": str, "bytes": str, "note": NUMBER, "loop": (bool, list), "pingpong": bool, "name": str},
+    "sample": {"id": str, "url": str, "bytes": str, "note": NUMBER, "loop": (bool, list), "pingpong": bool, "name": str, "zone": bool},
     "tune": {"id": str, "synth": str, "steps": list, "length": NUMBER, "repeat": (bool, int, float), "beats": bool},
     "stop": {"id": str},
     "master": {"volume": NUMBER, "mute": bool, "set": dict},
     "free": {"id": str},
     "buffer": {"size": (int, str)},
+    "zones": {"id": str, "zones": (list, type(None)), "kit": bool, "crossfade": NUMBER + (dict,), "oneShot": bool, "release": bool},
     "song": {"id": str, "do": str, "url": str, "bytes": str, "name": str, "repeat": bool, "vol": NUMBER, "raw": bool,
              "patches": dict, "files": dict, "order": int, "row": int},
 }
@@ -60,6 +61,7 @@ def test_everything_the_library_writes_is_in_the_format(sent, tmp_path):
     play_sound("laser")
     play_sound("coin", 0.5, pitch=3, pan=-1, after=0.5)
     set_sound_buffer("large")
+    load_samples({"C2": "piano-C2.wav", "C3": "piano-C3.wav"}, crossfade=3).play("E2")
     play_sound("win", length="half", after="quarter")
     note("C4", "quarter")
     chord("Cm", "half")
@@ -279,6 +281,30 @@ def test_the_sound_buffer_is_set_by_a_word_or_frames_and_read_back(sent, capsys)
     assert sound_buffer() == {"frames": 4096, "delay": 179, "thread": "page", "underruns": 2, "setting": 4096}
     for batch in sent.batches:
         check(batch)
+
+
+def test_several_recordings_are_one_instrument(sent, tmp_path, monkeypatch):
+    """load_samples: a sample for each file (sent whole where Python has it), a synth, and its zones."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "piano-C2.wav").write_bytes(b"RIFF")
+    piano = load_samples(["piano-C2.wav", "piano-Fs2.wav", "x/60.wav"])
+    files, synth, zones = sent[:3], sent[3], sent[4]
+    assert [(c["op"], c["note"], c["zone"]) for c in files] == [("sample", 36, True), ("sample", 42, True), ("sample", 60, True)]
+    assert files[0]["bytes"] == "UklGRg==" and "url" not in files[0] and files[1]["url"] == "piano-Fs2.wav"
+    assert synth["op"] == "synth" and synth["preset"] == "sample" and "set" not in synth
+    assert zones == {"op": "zones", "id": synth["id"], "t": zones["t"], "zones": [
+        {"file": "piano-C2.wav", "note": 36, "sample": files[0]["id"]}, {"file": "piano-Fs2.wav", "note": 42, "sample": files[1]["id"]},
+        {"file": "x/60.wav", "note": 60, "sample": files[2]["id"]}]}
+    assert piano.wave == "sample" and piano.zones()[1] == {"file": "piano-Fs2.wav", "note": 42}
+    assert [note_in_name(n) for n in ("piano-C2.wav", "Fs2.wav", "a/Gb2.aiff", "kick_36.wav", "kick.wav", "take2-A4.wav")] == [36, 42, 42, 36, None, 69]
+    for wrong, says in ((["kick.wav"], "cannot be read from its name"), ([], "was given no sound files"), ("piano.wav", "needs the sound files"),
+                        ([{"file": "a-C4.wav", "loudness": [0, 1]}], 'a recording has no "loudness"'), ([{"file": "a-C4.wav", "loud": [1, 0]}], "loud is how hard")):
+        with pytest.raises(ValueError, match=says):
+            load_samples(wrong)
+    with pytest.raises(ValueError, match="crossfade is how many keys"):
+        load_samples(["a-C4.wav"], crossfade="wide")
+    with pytest.raises(ValueError, match='there is no "kits" to say here'):
+        piano.set_samples(["a-C4.wav"], kits=True)
 
 
 def test_chords_and_arpeggios(sent):

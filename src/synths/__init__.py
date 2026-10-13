@@ -83,7 +83,7 @@ import time
 
 __version__ = "0.1.0"
 
-__all__ = ["play_sound", "play_note", "play_notes", "make_synth", "load_sample", "play_song", "stop_song",
+__all__ = ["play_sound", "play_note", "play_notes", "make_synth", "load_sample", "load_samples", "note_in_name", "play_song", "stop_song",
            "stop_sound", "set_volume", "mute_sound", "unmute_sound", "set_effects", "set_tempo", "beats", "beat", "set_sound_buffer", "sound_buffer",
            "sound_time", "sound_names", "synth_names", "setting_names", "note_number", "chord_notes", "play_arp",
            "start_arp", "main_synth", "sound_output", "note", "chord", "rest", "start_lines", "loop_notes",
@@ -107,7 +107,7 @@ _NAMES = json.loads(r'''
 {
  "version": "0.1.0",
  "commands": 1,
- "engine": {"abi": 1, "version": "0.0.0", "parts": 64, "voices": 64, "samples": 1024, "events": ["note_on", "note_off", "all_notes_off", "param", "pitch_bend", "voice_pitch", "voice_freq", "voice_volume", "voice_pan", "voice_position", "voice_kill", "macro_tick", "arp", "arp_more", "song", "record"]},
+ "engine": {"abi": 1, "version": "0.0.0", "parts": 64, "voices": 64, "samples": 1024, "zones": 512, "zoneLayers": 4, "events": ["note_on", "note_off", "all_notes_off", "param", "pitch_bend", "voice_pitch", "voice_freq", "voice_volume", "voice_pan", "voice_position", "voice_kill", "macro_tick", "arp", "arp_more", "song", "record", "arp_style", "arp_beat", "arp_notes", "arp_step"]},
  "settings": [
   {"id": 0, "name": "volume", "kind": "float", "min": 0, "max": 2, "default": 1, "unit": "gain", "scope": "synth"},
   {"id": 1, "name": "pan", "kind": "float", "min": -1, "max": 1, "default": 0, "unit": "pan", "scope": "synth"},
@@ -230,7 +230,8 @@ _NAMES = json.loads(r'''
   {"id": 220, "name": "input.gate", "kind": "float", "min": -100, "max": 0, "default": -100, "unit": "db", "labels": {"-100": "off"}, "scope": "all"},
   {"id": 221, "name": "input.gate_release", "kind": "float", "min": 0.005, "max": 2, "default": 0.15, "unit": "seconds", "scope": "all"},
   {"id": 222, "name": "reverb.predelay", "kind": "float", "min": 0, "max": 0.2, "default": 0, "unit": "seconds", "scope": "all"},
-  {"id": 223, "name": "reverb.low_cut", "kind": "float", "min": 20, "max": 1000, "default": 120, "unit": "hz", "scope": "all"}
+  {"id": 223, "name": "reverb.low_cut", "kind": "float", "min": 20, "max": 1000, "default": 120, "unit": "hz", "scope": "all"},
+  {"id": 224, "name": "tempo", "kind": "float", "min": 20, "max": 999, "default": 120, "unit": "bpm", "scope": "all"}
  ],
  "names": {"wave": {"setting": "osc1.wave", "scale": 1}, "level1": {"setting": "osc1.level", "scale": 1}, "width": {"setting": "osc1.pulse_width", "scale": 1}, "pulseWidth": {"setting": "osc1.pulse_width", "scale": 1}, "sample": {"setting": "osc1.sample", "scale": 1}, "octave": {"setting": "transpose", "scale": 12}, "pitch": {"setting": "transpose", "scale": 1}, "maxVoices": {"setting": "voices", "scale": 1}, "voices": {"setting": "unison.voices", "scale": 1}, "detune": {"setting": "unison.detune", "scale": 1}, "spread": {"setting": "unison.spread", "scale": 1}, "wave2": {"setting": "osc2.wave", "scale": 1}, "level2": {"setting": "osc2.level", "scale": 1}, "pitch2": {"setting": "osc2.coarse", "scale": 1}, "detune2": {"setting": "osc2.fine", "scale": 1}, "width2": {"setting": "osc2.pulse_width", "scale": 1}, "sync": {"setting": "osc2.sync", "scale": 1}, "ring": {"setting": "osc2.ring", "scale": 1}, "sub": {"setting": "sub.level", "scale": 1}, "noise": {"setting": "noise.level", "scale": 1}, "macroRate": {"setting": "macro.rate", "scale": 1}, "macroSync": {"setting": "macro.sync", "scale": 1}, "filter": {"setting": "filter.type", "scale": 1}, "slope": {"setting": "filter.slope", "scale": 1}, "cutoff": {"setting": "filter.cutoff", "scale": 1}, "resonance": {"setting": "filter.resonance", "scale": 1}, "keytrack": {"setting": "filter.keytrack", "scale": 1}, "sweep": {"setting": "filter.env", "scale": 1}, "sweepAttack": {"setting": "filter_env.attack", "scale": 1}, "sweepDecay": {"setting": "filter_env.decay", "scale": 1}, "sweepSustain": {"setting": "filter_env.sustain", "scale": 1}, "sweepRelease": {"setting": "filter_env.release", "scale": 1}, "attack": {"setting": "amp.attack", "scale": 1}, "decay": {"setting": "amp.decay", "scale": 1}, "sustain": {"setting": "amp.sustain", "scale": 1}, "release": {"setting": "amp.release", "scale": 1}, "curve": {"setting": "amp.curve", "scale": 1}, "pitchSweep": {"setting": "mod_env.pitch", "scale": 1}, "pitchSweepAttack": {"setting": "mod_env.attack", "scale": 1}, "pitchSweepDecay": {"setting": "mod_env.decay", "scale": 1}, "vibrato": {"setting": "lfo1.pitch", "scale": 1}, "vibratoRate": {"setting": "lfo1.rate", "scale": 1}, "vibratoDelay": {"setting": "lfo1.delay", "scale": 1}, "tremolo": {"setting": "lfo1.amp", "scale": 1}, "wobble": {"setting": "lfo2.cutoff", "scale": 1}, "wobbleRate": {"setting": "lfo2.rate", "scale": 1}, "autopan": {"setting": "lfo2.pan", "scale": 1}, "pwm": {"setting": "lfo2.pulse_width", "scale": 1}, "pwmRate": {"setting": "lfo2.rate", "scale": 1}, "distortion": {"setting": "fx.drive", "scale": 1}, "drive": {"setting": "fx.drive", "scale": 1}, "crush": {"setting": "fx.bits", "scale": 1}, "bits": {"setting": "fx.bits", "scale": 1}, "downsample": {"setting": "fx.downsample", "scale": 1}, "pitchShift": {"setting": "fx.pitch", "scale": 1}, "ringMod": {"setting": "fx.ring", "scale": 1}, "ringSpeed": {"setting": "fx.ring_freq", "scale": 1}, "ringWave": {"setting": "fx.ring_wave", "scale": 1}, "comb": {"setting": "fx.comb", "scale": 1}, "combTone": {"setting": "fx.comb_freq", "scale": 1}, "combFeedback": {"setting": "fx.comb_feedback", "scale": 1}, "flanger": {"setting": "fx.comb_depth", "scale": 1}, "flangerRate": {"setting": "fx.comb_rate", "scale": 1}, "reverse": {"setting": "osc1.reverse", "scale": 1}, "echo": {"setting": "send.delay", "scale": 1}, "delay": {"setting": "send.delay", "scale": 1}, "reverb": {"setting": "send.reverb", "scale": 1}, "chorus": {"setting": "send.chorus", "scale": 1}, "masterVolume": {"setting": "master.volume", "scale": 1}, "limiter": {"setting": "master.limiter", "scale": 1}, "echoTime": {"setting": "delay.time", "scale": 1}, "echoFeedback": {"setting": "delay.feedback", "scale": 1}, "echoTone": {"setting": "delay.tone", "scale": 1}, "echoBounce": {"setting": "delay.pingpong", "scale": 1}, "reverbSize": {"setting": "reverb.size", "scale": 1}, "reverbDamping": {"setting": "reverb.damping", "scale": 1}, "reverbType": {"setting": "reverb.type", "scale": 1}, "reverbDecay": {"setting": "reverb.decay", "scale": 1}, "reverbPredelay": {"setting": "reverb.predelay", "scale": 1}, "reverbLowCut": {"setting": "reverb.low_cut", "scale": 1}, "chorusRate": {"setting": "chorus.rate", "scale": 1}, "chorusDepth": {"setting": "chorus.depth", "scale": 1}, "micGain": {"setting": "input.gain", "scale": 1}, "micGate": {"setting": "input.gate", "scale": 1}, "micGateRelease": {"setting": "input.gate_release", "scale": 1}},
  "choiceWords": {"square": "pulse", "sawtooth": "saw", "tri": "triangle", "sin": "sine", "low": "lowpass", "high": "highpass", "band": "bandpass", "none": "off", "hiss": "white", "chip": "lfsr", "buzz": "lfsr_short"},
@@ -281,6 +282,7 @@ _NAMES = json.loads(r'''
  "midi": {"types": ["noteOff", "noteOn", "notePressure", "control", "program", "pressure", "bend", "sysex", "timeCode", "songPosition", "songSelect", "tuneRequest", "clock", "start", "continue", "stop", "sensing", "reset", "other", "devices", "tempo", "learned", "set"], "does": ["devices", "listen", "input", "output", "send", "play", "through", "map", "learn", "unmap", "clock", "stop"], "functions": ["onMidi", "onMidiNote", "onMidiNoteOff", "onMidiControl", "onMidiDevices", "useMidiHooks", "sendMidi", "sendMidiNote", "sendMidiNoteOff", "sendMidiControl", "sendMidiBend", "sendMidiProgram", "sendMidiClock", "midiDevices", "useMidiInput", "useMidiOutput", "midiInput", "midiOutput", "receiveMidi", "stopMidi"], "synthFunctions": ["playFromMidi", "sendToMidi", "mapMidi", "learn", "unmapMidi", "midiInput", "midiOutput"], "choices": {"settings": ["device", "channel"], "all": "all", "none": "no devices", "unavailable": "no MIDI here"}},
  "voices": {"robot": {"help": "A machine: the voice multiplied by a 50 Hz wave, ringing in a metal pipe.", "values": {"fx.ring": 1, "fx.ring_freq": 50, "fx.comb": 0.45, "fx.comb_freq": 110, "fx.comb_feedback": 0.8, "fx.bits": 10}}, "chipmunk": {"help": "Small and squeaky: everything seven semitones higher.", "values": {"fx.pitch": 7}}, "monster": {"help": "Huge and deep: seven semitones lower, with a growl and a little room.", "values": {"fx.pitch": -7, "fx.drive": 0.25, "send.reverb": 0.3, "reverb.size": 0.7, "reverb.damping": 0.6}}, "cave": {"help": "Far inside a cave: long echoes and an enormous, dark space.", "values": {"send.delay": 0.5, "send.reverb": 0.6, "delay.time": 0.38, "delay.feedback": 0.55, "delay.tone": 2500, "reverb.type": 3, "reverb.size": 0.4, "reverb.damping": 0.55}}, "telephone": {"help": "Down an old phone line: only the middle of the voice, coarse and a little crushed.", "values": {"filter.type": 3, "filter.slope": 1, "filter.cutoff": 1200, "filter.resonance": 0.2, "fx.drive": 0.2, "fx.bits": 8, "fx.downsample": 6}}, "alien": {"help": "Not from here: higher, multiplied by a 180 Hz wave, with a slow metallic sweep.", "values": {"fx.pitch": 4, "fx.ring": 0.8, "fx.ring_freq": 180, "fx.comb": 0.4, "fx.comb_freq": 600, "fx.comb_feedback": 0.75, "fx.comb_rate": 0.4, "fx.comb_depth": 0.5, "send.chorus": 0.4}}, "whisper": {"help": "Hoarse and breathy: the voice's pitch blurred into noise, with its low end taken off.", "values": {"filter.type": 2, "filter.cutoff": 500, "filter.resonance": 0, "fx.ring": 1, "fx.ring_wave": 1, "fx.ring_freq": 350}}},
  "buffer": {"functions": ["setSoundBuffer", "soundBuffer"], "words": {"small": 1024, "medium": 2048, "large": 4096, "auto": "auto"}, "least": 256, "most": 16384, "event": "buffer", "reads": ["frames", "delay", "thread", "underruns", "setting"], "threads": ["audio", "page"]},
+ "zones": {"functions": ["loadSamples"], "synthFunctions": ["setSamples", "zones"], "words": ["file", "note", "from", "to", "loud", "tune", "volume", "pan", "release", "loop", "oneShot", "asRecorded", "start"], "options": ["kit", "crossfade", "loop", "oneShot"], "most": 512, "layers": 4},
  "song": {"does": ["play", "resume", "pause", "stop", "seek", "volume", "repeat", "mute", "solo", "loopPattern", "replace"], "functions": ["stop", "pause", "resume", "seek", "mute", "unmute", "solo", "loopPattern", "replace"]},
  "microphone": {"names": {"pitch": "pitchShift", "ring": "ringMod", "gain": "micGain", "gate": "micGate", "gaterelease": "micGateRelease"}, "gate": -50, "states": ["asking", "on", "refused", "none", "busy", "unavailable", "off"], "functions": ["useMicrophone", "stopMicrophone", "recordSound", "startRecording", "stopRecording", "recordOutput", "saveSound", "receiveSoundEvents", "voiceNames"], "micFunctions": ["listen", "mute", "record", "whenReady", "close"], "takeFunctions": ["onDone", "whenDone", "stopRecording"], "events": ["microphone", "recorded", "saved"], "longestRecording": 120, "usualRecording": 30}
 }
@@ -481,10 +483,13 @@ class _Slot:
         self._sample = self._id = id
 
 
-def _sample_file(s, path, note=None, loop=None):
-    """A sound file as a sample: the command that loads it is written, and the id it goes by given back."""
+def _sample_file(s, path, note=None, loop=None, zone=False):
+    """A sound file as a sample: the command that loads it is written, and the id it goes by given back. `zone`: it
+    is one recording of a sample map, so nothing is said of it alone if it cannot be loaded."""
     sid = s.id("w")
     c = {"op": "sample", "id": sid, "name": path}
+    if zone:
+        c["zone"] = True
     if note is not None:
         c["note"] = note_number(note)
     if loop:
@@ -1357,6 +1362,7 @@ class Synth:
         put(self, "_worn", None)         # a voice changer, once one has been put on: {"voice", "under"}
         put(self, "_plain", None)        # what the voice settings were before sound_like() first changed them
         put(self, "_loop", False)
+        put(self, "_zones", None)        # the `zones` command of its sample map, if it has one
 
     # What is this object's own and not a setting of the engine.
     _OWN = ("voice", "loop")
@@ -1389,6 +1395,8 @@ class Synth:
             object.__setattr__(self, name, value)
         elif name == "macro":
             self.set_macro(value)
+        elif name == "samples":
+            self.set_samples(value)      # lead.samples = {"C3": "a.wav"}; lead.samples() is still the wave for a scope
         elif _setting(self._name(name)) is not None:
             self.set({name: value})
         else:
@@ -1624,6 +1632,30 @@ class Synth:
         if send:
             self._sound.command({"op": "set", "id": self._id, "voice": voice, "t": self._sound.clock() if at is None else at})
 
+    def set_samples(self, files, **o):
+        """Several recordings for this synth to play in the place of its wave: lead.samples = {"C2": "piano-C2.wav",
+        "C3": "piano-C3.wav"}, or lead.set_samples(files, crossfade=3). What load_samples takes; None takes them away."""
+        s = self._sound
+        if files is None or files is False:
+            if self._zones:
+                s.command({"op": "zones", "id": self._id, "zones": None, "t": s.clock()})
+            object.__setattr__(self, "_zones", None)
+            return self
+        zones = _zones_command(s, self._id, files, _map_words(o, "set_samples", ""), "set_samples", False)
+        self._patch[_setting("sample")["id"]] = 0
+        s.command(zones)
+        object.__setattr__(self, "_zones", zones)
+        if self.wave != "sample":
+            self.set({"wave": "sample"})
+        return self
+
+    def zones(self):
+        """This synth's recordings as it was given them: [{"file", "note", ...}], or None with none. (The keys each
+        was worked out to play are the page's to say: a control tied to the synth reads them there.)"""
+        if not self._zones:
+            return None
+        return [{k: (list(v) if isinstance(v, list) else v) for k, v in zone.items() if k != "sample"} for zone in self._zones["zones"]]
+
     def sound_like(self, other):
         """Give this the voice and the voice effects of another: take.sound_like(mic) makes a recording sound as the
         microphone does now, whatever voice has been chosen and however its dials have been turned since."""
@@ -1766,6 +1798,137 @@ class Synth:
 _nothing = object()
 
 
+# ---------------------------------------------------------------- sample maps: several recordings as one instrument
+
+_NAMED_NOTE = re.compile(r"(?<![A-Za-z0-9#])([A-Ga-g])(#|s|b)?(-?\d)(?![A-Za-z0-9#])")
+_NAMED_KEY = re.compile(r"(?<![A-Za-z0-9.])(\d{1,3})(?![A-Za-z0-9])")
+
+
+def note_in_name(file):
+    """The note in a sound file's name: "piano-C2.wav" is 36, and so are "Fs2", "F#2" and "Gb2" for their note, and
+    a number alone ("60.wav", "kick_36.wav") is that key. It is the last such word in the name; None if there is none."""
+    name = re.sub(r"\.[A-Za-z0-9]+$", "", re.sub(r"^.*[\\/]", "", str(file)))
+    words = _NAMED_NOTE.findall(name)
+    if words:
+        letter, mark, octave = words[-1]
+        try:
+            return note_number(letter.upper() + ("#" if mark == "s" else mark) + octave)
+        except ValueError:
+            pass
+    numbers = [int(n) for n in _NAMED_KEY.findall(name) if int(n) <= 127]
+    return numbers[-1] if numbers else None
+
+
+# What may be said of one recording, and of all of them, in Python's spelling (synths.js: ZONE_WORDS and MAP_WORDS).
+_ZONE_WORDS = [_snake(w) for w in _NAMES["zones"]["words"]]
+_MAP_WORDS = [_snake(w) for w in _NAMES["zones"]["options"]]
+_ZONE_EXAMPLE = 'as in load_samples({"C2": "piano-C2.wav", "C3": "piano-C3.wav"}) or load_samples(["piano-C2.wav", "piano-C3.wav"])'
+
+
+def _zones_given(s, files, o, said):
+    """WHAT load_samples WAS GIVEN, as the zones of a `zones` command, with each file's `sample` command written on
+    the way. The three ways of saying it: {"C2": "a.wav", "F#2": ["b1.wav", "b2.wav"]} (the note each was played at,
+    and takes that go in turn), ["piano-C2.wav", "piano-Fs2.wav"] (the note is in the name), and a list of
+    {"file", "note", "from", "to", "loud", "tune", "volume", "pan", "release", "loop", "one_shot", "start"}."""
+    if not isinstance(files, (dict, list, tuple)):
+        raise ValueError("%s needs the sound files of an instrument and the note each was played at, %s, not %s"
+                         % (said, _ZONE_EXAMPLE, _shown(files)))
+    given = []
+
+    def one(what, note=None):
+        if isinstance(what, str) and what.strip():
+            given.append(dict({"file": what}, **({} if note is None else {"note": note})))
+        elif isinstance(what, (list, tuple)) and note is not None:
+            for take in what:
+                one(take, note)
+        elif not isinstance(what, dict) or not isinstance(what.get("file"), str) or not what["file"].strip():
+            raise ValueError('%s: each recording is the name of a sound file, or {"file": "soft-C4.wav", "note": "C4", '
+                             '"loud": [0, 0.5]}, not %s' % (said, _shown(what)))
+        else:
+            zone = {_snake(word): value for word, value in what.items()}
+            for word in zone:
+                if word not in _ZONE_WORDS:
+                    raise ValueError("%s: a recording has no %s.%s It may have: %s"
+                                     % (said, _shown(word), _meant(word, _ZONE_WORDS), ", ".join(_ZONE_WORDS)))
+            if zone.get("note") is None and note is not None:
+                zone["note"] = note
+            given.append(zone)
+    if isinstance(files, dict):
+        for note, what in files.items():
+            one(what, note)
+    else:
+        for what in files:
+            one(what)
+    if not given:
+        raise ValueError("%s was given no sound files. It needs at least one, %s" % (said, _ZONE_EXAMPLE))
+    loaded, zones = {}, []
+    for g in given:
+        note = note_in_name(g["file"]) if g.get("note") is None else note_number(g["note"])
+        if note is None:
+            raise ValueError("%s: the note of %s cannot be read from its name. Put the note in the name (piano-C4.wav, "
+                             'piano-Fs2.wav, 60.wav), or say it: load_samples({"C4": %s})' % (said, _shown(g["file"]), _shown(g["file"])))
+        zone = {"file": g["file"], "note": note}
+        for edge in ("from", "to"):
+            if g.get(edge) is not None:
+                zone[edge] = note_number(g[edge])
+        if g.get("loud") is not None:
+            loud = g["loud"]
+            if (not isinstance(loud, (list, tuple)) or len(loud) != 2 or not all(_is_number(v) and 0 <= v <= 1 for v in loud)
+                    or loud[0] > loud[1]):
+                raise ValueError("%s: loud is how hard a note is played to get this recording, from and to, as in "
+                                 '"loud": [0, 0.5], not %s' % (said, _shown(loud)))
+            zone["loud"] = list(loud)
+        for word, least, most in (("tune", -1200, 1200), ("volume", 0, 4), ("pan", -1, 1), ("release", 0, 20)):
+            if g.get(word) is not None:
+                zone[word] = _amount(g[word], "%s: %s" % (said, word), least, most)
+        if g.get("start") is not None:
+            zone["start"] = _amount(g["start"], "%s: start" % said, 0, 1e9)
+        if g.get("one_shot") is not None:
+            zone["oneShot"] = bool(g["one_shot"])
+        if g.get("as_recorded") is not None:
+            zone["asRecorded"] = bool(g["as_recorded"])
+        # One file is loaded once, however many zones play it.
+        loop = g.get("loop", o.get("loop"))
+        k = json.dumps([g["file"], note, loop or 0])
+        if k not in loaded:
+            loaded[k] = _sample_file(s, g["file"], note, loop, zone=True)
+        zone["sample"] = loaded[k]
+        zones.append(zone)
+    return zones
+
+
+def _zones_command(s, id, files, o, said, own_release):
+    """The `zones` command for a synth, which the synth keeps to read its zones back."""
+    c = {"op": "zones", "id": id, "zones": _zones_given(s, files, o, said), "t": s.clock()}
+    if o.get("kit"):
+        c["kit"] = True
+    f = o.get("crossfade")
+    if f is not None and f is not False:
+        number = _is_number(f) and f >= 0
+        both = (isinstance(f, dict) and set(f) <= {"keys", "loud"} and (f.get("keys") is None or (_is_number(f["keys"]) and f["keys"] >= 0))
+                and (f.get("loud") is None or (_is_number(f["loud"]) and 0 <= f["loud"] <= 1)))
+        if not number and not both:
+            raise ValueError('%s: crossfade is how many keys neighbouring recordings fade into each other over, as in '
+                             'crossfade=3, or {"keys": 3, "loud": 0.1} for the loudness layers too, not %s' % (said, _shown(f)))
+        c["crossfade"] = f
+    if o.get("one_shot") is not None:
+        c["oneShot"] = bool(o["one_shot"])
+    # A release said for the whole synth is every zone's; with none said, each zone has one that suits its note.
+    if own_release:
+        c["release"] = False
+    return c
+
+
+def _map_words(o, said, example):
+    """What was said of all the recordings, in one spelling; anything else is refused."""
+    o = {_snake(word): value for word, value in (o or {}).items()}
+    for word in o:
+        if word not in _MAP_WORDS:
+            raise ValueError("%s: there is no %s to say here.%s It may be: %s. A setting of the synth is set on the synth, "
+                             "as in lead.release = 0.5" % (said, _shown(word), _meant(word, _MAP_WORDS), ", ".join(_MAP_WORDS)))
+    return o
+
+
 def _make_synth(s, preset, settings):
     names = [_snake(n) for n in _NAMES["synths"] if n != "sample"]
     if preset is not None:
@@ -1778,6 +1941,8 @@ def _make_synth(s, preset, settings):
     macro = settings.pop("macro", _nothing)
     if macro is not _nothing:
         _check_macro(macro, said)
+    # Several recordings for its wave: what load_samples takes.
+    recordings = settings.pop("samples", None)
     patch = _patch_of(_NAMES["plain"], said, False)
     made = _NAMES["synths"][preset] if preset else {}
     _patch_of(made, said, False, patch)
@@ -1798,6 +1963,8 @@ def _make_synth(s, preset, settings):
     s.command(c)
     synth = Synth(s, id, patch, made.get("note", 60 if note is None else note_number(note)), 0.3)
     object.__setattr__(synth, "_macro", made.get("macro") if macro is _nothing else macro or None)
+    if recordings is not None:
+        synth.set_samples(recordings)
     return synth
 
 
@@ -1847,6 +2014,36 @@ def load_sample(path=None, note=None, loop=None, **settings):
     s.command({"op": "synth", "id": id, "preset": "sample", "set": dict(_sendable(settings), sample=sid), "t": s.clock()})
     synth = Synth(s, id, patch, 60 if note is None else note_number(note), None)
     object.__setattr__(synth, "_sample", sid)
+    return synth
+
+
+def load_samples(files=None, **settings):
+    """Several recordings as one instrument: piano = load_samples({"C2": "piano-C2.wav", "C3": "piano-C3.wav"}).
+    Each name is the note that file was played at, and every key plays the nearest recording, moved to its pitch;
+    load_samples(["piano-C2.wav", "piano-Fs2.wav"]) reads the notes from the files' names. It gives a synth, as
+    load_sample does: piano.play("E4"), piano.reverb = 0.3, keyboard(piano).
+    kit=True is a drum kit: each key is its own sound, as recorded, and the keys between are silent.
+    crossfade=3 fades neighbours into each other over three keys; loop=True has each go round while held.
+    A list of {"file", "note", "from", "to", "loud": [0, 0.5], "tune", "volume", "release"} says everything: layers
+    by how hard a note is played, the keys by hand, and several files for one note are takes that go in turn."""
+    said = "load_samples"
+    o = {_snake(k): settings.pop(k) for k in list(settings) if _snake(k) in _MAP_WORDS}
+    s = _sound()
+    patch = _patch_of(_NAMES["plain"], said, False)
+    _patch_of(_NAMES["synths"].get("sample"), said, False, patch)
+    _patch_of(settings, said, True, patch)
+    patch[_setting("sample")["id"]] = 0
+    s.share(patch, settings)
+    id = s.id("s")
+    own_release = any((_setting(k) or {}).get("name") == "amp.release" for k in settings)
+    zones = _zones_command(s, id, files, o, said, own_release)
+    c = {"op": "synth", "id": id, "preset": "sample", "t": s.clock()}
+    if settings:
+        c["set"] = _sendable(settings)
+    s.command(c)
+    s.command(zones)
+    synth = Synth(s, id, patch, min(z["note"] for z in zones["zones"]) if zones.get("kit") else 60, None)
+    object.__setattr__(synth, "_zones", zones)
     return synth
 
 

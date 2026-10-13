@@ -97,6 +97,18 @@ def test_the_same_program_writes_the_same_commands_as_synths_js(sent, tmp_path):
     bare.wave = "sample"             # it has no sample: said once, and not sent
     keys = make_synth(sample="piano.wav", note="C4", cutoff=1800)
     keys.set(sample="other.wav", wave="sample")
+    piano = load_samples({"C2": "piano-C2.wav", "F#2": ["a.wav", "b.wav"]}, crossfade=3, reverb=0.3)
+    piano.play("E2")
+    kit = load_samples(["kick_36.wav", "snare-D2.wav"], kit=True)
+    kit.play()
+    load_samples([{"file": "soft-C4.wav", "note": "C4", "loud": [0, 0.5], "tune": -5},
+                  {"file": "hard-C4.wav", "note": "C4", "loud": [0.5, 1], "one_shot": True, "from": "C3", "to": 72}], release=1, loop=True)
+    pad = make_synth("pad")
+    pad.set_samples({"C3": "a.wav"}, crossfade={"keys": 2, "loud": 0.1}, one_shot=True)
+    assert pad.wave == "sample" and pad.zones() == [{"file": "a.wav", "note": 48}]
+    pad.samples = None
+    assert pad.zones() is None
+    make_synth("lead", samples={"C3": "a.wav"}, cutoff=900)
     stop_microphone()
 
     def same(c):

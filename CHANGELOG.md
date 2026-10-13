@@ -20,6 +20,7 @@
 - `midi_input()`, `lead.midi_input()` and `midi_output()`: the MIDI device and channel as a target with `"device"` and `"channel"`, for a select on the screen.
 - The reverb has types: `set_effects(reverb_type="hall")` (room, hall, plate, cathedral, spring), `reverb_decay`, `reverb_predelay`, `reverb_low_cut`. A setting every synth shares has one value, whoever set it, and every synth and `sound_output()` read that back.
 - `pwm` and `pwm_rate`: a pulse wave's width moving by itself, and how fast.
+- `load_samples({"C2": "piano-C2.wav", "C3": "piano-C3.wav"})`, as synths.js d443436 has it: several recordings as one instrument, with the notes read from the files' names, `kit=True` for a drum kit, `crossfade=`, layers by how hard a note is played and takes that go in turn; `lead.samples = {...}`, `lead.set_samples`, `make_synth(samples=...)`, `piano.zones()` and `note_in_name`.
 - `set_sound_buffer("large")` and `sound_buffer()`, as synths.js 932eeab has them: how much sound is made at a time on a page with no https address, set by a word or a number of frames, and read back as frames, delay, thread, under-runs and setting.
 - `synths.receive_sound_events(events)` hands a program what a host's player said back.
 - `after=`, `at=` and `beat=` on everything that makes a sound.

@@ -340,6 +340,37 @@ lead.sample = load_sample("piano.wav")                    # its wave is now "sam
 keys = make_synth(sample="piano.wav", note="C4", cutoff=1800, release=0.6)   # or all in one line: note is the note the recording is at
 ```
 
+### Several recordings for one instrument
+
+One recording stretched over a whole keyboard sounds thin at one end and muddy at the other. A real instrument is several recordings, each playing the keys near the note it was recorded at:
+
+```python
+piano = load_samples({"C2": "piano-C2.wav", "F#2": "piano-Fs2.wav", "C3": "piano-C3.wav"})   # the note each was played at
+piano.play("E2")                  # the nearest recording (F#2), moved down to E
+piano.reverb = 0.3                # a synth like any other: settings, dials, keyboard(piano), a tune, an arpeggio
+```
+
+The keys are split halfway between neighbours, and every key plays, below the lowest recording and above the highest too. With the notes in the files' names there is less to write: `load_samples(["piano-C2.wav", "piano-Fs2.wav", "piano-C3.wav"])` reads `C2`, `Fs2` (or `F#2`, `Gb2`) and `C3` from them, and a number alone (`60.wav`) is that key; `note_in_name("piano-Fs2.wav")` is how it reads one. A name with no note in it is refused, with what to do about it.
+
+A drum kit is the same with `kit=True`: each key is its own sound, played as it was recorded whatever the key, to its end, and the keys between are silent.
+
+```python
+kit = load_samples({"C2": "kick.wav", "D2": "snare.wav", "F#2": "hat.wav"}, kit=True)
+kit.play_notes("C2 F#2 D2 F#2", 0.25, repeat=True)
+```
+
+What else can be said:
+
+- **`crossfade=3`** fades neighbouring recordings into each other over three keys, where a change from one to the next would be heard. `crossfade={"keys": 3, "loud": 0.1}` fades the loudness layers too.
+- **Layers by how hard a note is played**, in the explicit form, a list of dicts: `load_samples([{"file": "soft-C4.wav", "note": "C4", "loud": [0, 0.5]}, {"file": "hard-C4.wav", "note": "C4", "loud": [0.5, 1]}])`. `loud` is the note's volume, from and to.
+- **Takes that go in turn**: several files for one note, `{"C4": ["snare-1.wav", "snare-2.wav"]}`, and each hit plays the next.
+- **By hand**, for each recording: `"from"` and `"to"` (its keys), `"tune"` (cents), `"volume"`, `"pan"`, `"release"` (seconds), `"one_shot"`, `"as_recorded"`, `"loop"`, `"start"` (frames). `loop=True` and `one_shot=True` after the files are for all of them.
+- **Release.** With nothing said each recording has a release that suits its note, longer for the low ones, as a piano's are. `load_samples(files, release=1)` gives every recording that release in their place.
+- **On an ordinary synth**: `lead.samples = {"C3": "a.wav", "C4": "b.wav"}`, `lead.set_samples(files, crossfade=3)` or `make_synth(samples={...}, cutoff=1800)`, and the recordings go through that synth's filter and envelope. `lead.samples = None` takes them away. (`lead.samples()` is still the wave for a scope.)
+- **Reading it back**: `piano.zones()` is the list as you gave it, each with its file and its note. The keys each was worked out to play are the page's to know.
+
+Where Python can read the files they are sent with the commands; otherwise the page fetches them from beside the scene, as for `load_sample`.
+
 ## When things start
 
 Everything that makes a sound takes one of these:
