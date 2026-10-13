@@ -1,8 +1,1337 @@
-"""synths: sounds and music in Python.
+"""synths: sounds and music in Python. The sound sibling of Pyctures.
 
-This module is the Python half of synths. It sends commands (start a note,
-change a value, play a song) to the sound engine, which runs on the browser's
-audio thread; no sound is worked out in Python.
+    from synths import *
+
+    play_sound("laser")                    # a ready-made game sound: coin, jump, laser, explosion, hit, powerup, ...
+    play_note("C4")                        # a note on a pleasant synth: a name or a number (60 is middle C),
+    play_note("C4", 0.5, 0.8)              # then how long in seconds and how loud (0 to 1). A list is a chord
+    play_notes("C4 E4 G4 - C5:2", 0.25)    # a tune, a step every quarter of a second; "-" is a rest
+    lead = make_synth("lead", cutoff=1200) # a synth of your own, from a ready-made one (bass, lead, pad, pluck, ...)
+    lead.play("E4", 0.5)                   # play a note; lead.play(["C4", "E4", "G4"]) is a chord
+    lead.cutoff = 800                      # every setting is a plain attribute, and changes notes already sounding
+    note = lead.start("C4")                # a note that stays until note.stop(); note.slide_to("G4", 0.5)
+    lead.arp("Cm7")                        # a chord from one voice, as a fast arpeggio (a C64 chord)
+    chord = lead.start_arp("Am")           # one that stays: chord.change("F"), chord.stop()
+    drum = load_sample("kick.wav")         # a recorded sound from a file; drum.play()
+    play_song("tune.mod")                  # a tracker song (not ready yet in this version)
+    set_volume(0.5), mute_sound(), unmute_sound(), stop_sound()
+    set_effects(echo_time=0.3, reverb_size=0.8)
+    set_tempo(120), beats(2)               # beats(2) is how many seconds two beats last
+
+When something starts: everything that makes a sound takes after=seconds, at=a time read from
+sound_time(), or beat=a beat number.
+
+HOW IT IS BUILT. No sound is worked out in Python. Every function here only WRITES A COMMAND:
+plain data such as {"op": "note", "id": "s1", "note": [60], "len": 0.5, "t": 12.25}, in the format
+of synths.js (its docs/commands.md is the contract). Every id is chosen here, and nothing is ever
+answered, so no line of a program waits for the sound. A PLAYER somewhere else (synths.js, in a
+web page) owns the sound card and carries the commands out.
+
+TIME. Each command carries the time it was asked for on Python's own clock
+(time.perf_counter()), and each batch the clock when it was sent. The player lines that clock up
+with the sound card's and plays everything a moment late on the exact sample, so commands that
+were called at uneven moments and sent together once a frame keep exactly the spacing they had.
+
+HOW THE COMMANDS TRAVEL (see _sound):
+
+  - In a Pyctures scene they ride the frame's own message: the first sound of a frame adds ONE
+    command to the frame, a call of `send(batch)` on the page's sound object (the fixed handle
+    H_SOUND, 10), and the rest of that frame's sounds join the same batch. This is so wherever
+    the scene's Python runs: in a browser's worker, in your own Python behind `pyctures run`, or
+    on another computer. Sound asked for outside draw() and update() (at the top of the file, in
+    setup(), in on_key_down()) is inside the same call from the page, so it goes with that
+    call's reply and never waits for a frame of its own.
+  - A host that plays the commands some other way calls connect(send), and each command is
+    handed to it at once.
+  - A program started with plain Python (`python tune.py`) has no player. If Pyctures is
+    installed the program is started again with `pyctures run`, which opens it in a browser;
+    otherwise it says how to, once, and carries on in silence.
+
+MIT licence.
 """
+import base64
+import json
+import math
+import os
+import re
+import sys
+import time
 
-__version__ = "0.0.0"
+__version__ = "0.1.0"
+
+__all__ = ["play_sound", "play_note", "play_notes", "make_synth", "load_sample", "play_song", "stop_song",
+           "stop_sound", "set_volume", "mute_sound", "unmute_sound", "set_effects", "set_tempo", "beats", "beat",
+           "sound_time", "sound_names", "synth_names", "setting_names", "note_number", "chord_notes", "play_arp",
+           "start_arp", "main_synth", "sound_output"]
+
+# The version of the command format: `synths` in every batch.
+COMMANDS = 1
+# The page's sound object in a Pyctures scene, unless Pyctures says otherwise (its H_SOUND).
+H_SOUND = 10
+
+# Every sound, ready-made synth and setting, as synths.js names them. Written here by
+# scripts/sync_names.py from synths.js's synths-names.json. Do not edit by hand.
+# NAMES:BEGIN
+_NAMES = json.loads(r'''
+{
+ "version": "0.1.0",
+ "commands": 1,
+ "engine": {"abi": 1, "version": "0.0.0", "parts": 64, "voices": 64, "samples": 1024, "events": ["note_on", "note_off", "all_notes_off", "param", "pitch_bend", "voice_pitch", "voice_freq", "voice_volume", "voice_pan", "voice_position", "voice_kill", "macro_tick", "arp", "arp_more", "song"]},
+ "settings": [
+  {"id": 0, "name": "volume", "kind": "float", "min": 0, "max": 2, "default": 1, "unit": "gain", "scope": "synth"},
+  {"id": 1, "name": "pan", "kind": "float", "min": -1, "max": 1, "default": 0, "unit": "pan", "scope": "synth"},
+  {"id": 2, "name": "transpose", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 3, "name": "tune", "kind": "float", "min": -100, "max": 100, "default": 0, "unit": "cents", "scope": "synth"},
+  {"id": 4, "name": "bend", "kind": "float", "min": -1, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 5, "name": "bend_range", "kind": "float", "min": 0, "max": 48, "default": 2, "unit": "semitones", "scope": "synth"},
+  {"id": 6, "name": "glide", "kind": "float", "min": 0, "max": 10, "default": 0, "unit": "seconds", "scope": "synth"},
+  {"id": 7, "name": "mode", "kind": "choice", "min": 0, "max": 2, "default": 0, "unit": "", "choices": ["poly", "mono", "legato"], "scope": "synth"},
+  {"id": 8, "name": "unison.voices", "kind": "int", "min": 1, "max": 8, "default": 1, "unit": "voices", "scope": "synth"},
+  {"id": 9, "name": "unison.detune", "kind": "float", "min": 0, "max": 100, "default": 20, "unit": "cents", "scope": "synth"},
+  {"id": 10, "name": "unison.spread", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "synth"},
+  {"id": 11, "name": "velocity", "kind": "float", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "synth"},
+  {"id": 16, "name": "osc1.wave", "kind": "choice", "min": 0, "max": 4, "default": 1, "unit": "", "choices": ["sine", "triangle", "saw", "pulse", "sample"], "scope": "synth"},
+  {"id": 17, "name": "osc1.level", "kind": "float", "min": 0, "max": 1, "default": 1, "unit": "gain", "scope": "synth"},
+  {"id": 18, "name": "osc1.coarse", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 19, "name": "osc1.fine", "kind": "float", "min": -100, "max": 100, "default": 0, "unit": "cents", "scope": "synth"},
+  {"id": 20, "name": "osc1.pulse_width", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "synth"},
+  {"id": 21, "name": "osc1.sample", "kind": "int", "min": 0, "max": 1023, "default": 0, "unit": "slot", "scope": "synth"},
+  {"id": 22, "name": "osc1.start", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 23, "name": "osc1.keytrack", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "synth"},
+  {"id": 24, "name": "osc2.wave", "kind": "choice", "min": 0, "max": 4, "default": 2, "unit": "", "choices": ["sine", "triangle", "saw", "pulse", "sample"], "scope": "synth"},
+  {"id": 25, "name": "osc2.level", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "gain", "scope": "synth"},
+  {"id": 26, "name": "osc2.coarse", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 27, "name": "osc2.fine", "kind": "float", "min": -100, "max": 100, "default": 0, "unit": "cents", "scope": "synth"},
+  {"id": 28, "name": "osc2.pulse_width", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "synth"},
+  {"id": 29, "name": "osc2.sample", "kind": "int", "min": 0, "max": 1023, "default": 0, "unit": "slot", "scope": "synth"},
+  {"id": 30, "name": "osc2.start", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 31, "name": "osc2.keytrack", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "synth"},
+  {"id": 32, "name": "osc2.sync", "kind": "bool", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 33, "name": "osc2.ring", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 34, "name": "osc1.reverse", "kind": "bool", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 35, "name": "osc2.reverse", "kind": "bool", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 36, "name": "sub.level", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "gain", "scope": "synth"},
+  {"id": 37, "name": "sub.wave", "kind": "choice", "min": 0, "max": 2, "default": 0, "unit": "", "choices": ["sine", "square", "triangle"], "scope": "synth"},
+  {"id": 38, "name": "sub.octave", "kind": "int", "min": -2, "max": -1, "default": -1, "unit": "octaves", "scope": "synth"},
+  {"id": 39, "name": "sample.antialias", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "synth"},
+  {"id": 40, "name": "noise.level", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "gain", "scope": "synth"},
+  {"id": 41, "name": "noise.type", "kind": "choice", "min": 0, "max": 3, "default": 0, "unit": "", "choices": ["white", "pink", "lfsr", "lfsr_short"], "scope": "synth"},
+  {"id": 42, "name": "noise.pitch", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 48, "name": "filter.type", "kind": "choice", "min": 0, "max": 7, "default": 0, "unit": "", "choices": ["off", "lowpass", "highpass", "bandpass", "notch", "low_band", "band_high", "all"], "scope": "synth"},
+  {"id": 49, "name": "filter.slope", "kind": "choice", "min": 0, "max": 1, "default": 0, "unit": "", "choices": ["12db", "24db"], "scope": "synth"},
+  {"id": 50, "name": "filter.cutoff", "kind": "float", "min": 20, "max": 20000, "default": 2000, "unit": "hz", "scope": "synth"},
+  {"id": 51, "name": "filter.resonance", "kind": "float", "min": 0, "max": 1, "default": 0.15, "unit": "", "scope": "synth"},
+  {"id": 52, "name": "filter.keytrack", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 53, "name": "filter.env", "kind": "float", "min": -96, "max": 96, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 54, "name": "filter.velocity", "kind": "float", "min": -96, "max": 96, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 56, "name": "amp.attack", "kind": "float", "min": 0, "max": 20, "default": 0.005, "unit": "seconds", "scope": "synth"},
+  {"id": 57, "name": "amp.decay", "kind": "float", "min": 0, "max": 20, "default": 0.1, "unit": "seconds", "scope": "synth"},
+  {"id": 58, "name": "amp.sustain", "kind": "float", "min": 0, "max": 1, "default": 0.8, "unit": "", "scope": "synth"},
+  {"id": 59, "name": "amp.release", "kind": "float", "min": 0, "max": 20, "default": 0.15, "unit": "seconds", "scope": "synth"},
+  {"id": 60, "name": "amp.curve", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "synth"},
+  {"id": 64, "name": "filter_env.attack", "kind": "float", "min": 0, "max": 20, "default": 0.005, "unit": "seconds", "scope": "synth"},
+  {"id": 65, "name": "filter_env.decay", "kind": "float", "min": 0, "max": 20, "default": 0.2, "unit": "seconds", "scope": "synth"},
+  {"id": 66, "name": "filter_env.sustain", "kind": "float", "min": 0, "max": 1, "default": 0.3, "unit": "", "scope": "synth"},
+  {"id": 67, "name": "filter_env.release", "kind": "float", "min": 0, "max": 20, "default": 0.2, "unit": "seconds", "scope": "synth"},
+  {"id": 68, "name": "filter_env.curve", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "synth"},
+  {"id": 72, "name": "mod_env.attack", "kind": "float", "min": 0, "max": 20, "default": 0.005, "unit": "seconds", "scope": "synth"},
+  {"id": 73, "name": "mod_env.decay", "kind": "float", "min": 0, "max": 20, "default": 0.2, "unit": "seconds", "scope": "synth"},
+  {"id": 74, "name": "mod_env.sustain", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 75, "name": "mod_env.release", "kind": "float", "min": 0, "max": 20, "default": 0.2, "unit": "seconds", "scope": "synth"},
+  {"id": 76, "name": "mod_env.curve", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "synth"},
+  {"id": 77, "name": "mod_env.pitch", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 78, "name": "mod_env.osc2_pitch", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 79, "name": "mod_env.pulse_width", "kind": "float", "min": -1, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 80, "name": "lfo1.wave", "kind": "choice", "min": 0, "max": 4, "default": 0, "unit": "", "choices": ["sine", "triangle", "saw", "square", "random"], "scope": "synth"},
+  {"id": 81, "name": "lfo1.rate", "kind": "float", "min": 0.01, "max": 50, "default": 5, "unit": "hz", "scope": "synth"},
+  {"id": 82, "name": "lfo1.delay", "kind": "float", "min": 0, "max": 10, "default": 0, "unit": "seconds", "scope": "synth"},
+  {"id": 83, "name": "lfo1.fade", "kind": "float", "min": 0, "max": 10, "default": 0, "unit": "seconds", "scope": "synth"},
+  {"id": 84, "name": "lfo1.sync", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "synth"},
+  {"id": 85, "name": "lfo1.pitch", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 86, "name": "lfo1.pulse_width", "kind": "float", "min": -1, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 87, "name": "lfo1.cutoff", "kind": "float", "min": -96, "max": 96, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 88, "name": "lfo1.amp", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 89, "name": "lfo1.pan", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 96, "name": "lfo2.wave", "kind": "choice", "min": 0, "max": 4, "default": 1, "unit": "", "choices": ["sine", "triangle", "saw", "square", "random"], "scope": "synth"},
+  {"id": 97, "name": "lfo2.rate", "kind": "float", "min": 0.01, "max": 50, "default": 0.5, "unit": "hz", "scope": "synth"},
+  {"id": 98, "name": "lfo2.delay", "kind": "float", "min": 0, "max": 10, "default": 0, "unit": "seconds", "scope": "synth"},
+  {"id": 99, "name": "lfo2.fade", "kind": "float", "min": 0, "max": 10, "default": 0, "unit": "seconds", "scope": "synth"},
+  {"id": 100, "name": "lfo2.sync", "kind": "bool", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 101, "name": "lfo2.pitch", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 102, "name": "lfo2.pulse_width", "kind": "float", "min": -1, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 103, "name": "lfo2.cutoff", "kind": "float", "min": -96, "max": 96, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 104, "name": "lfo2.amp", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 105, "name": "lfo2.pan", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 112, "name": "fx.drive", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 113, "name": "fx.bits", "kind": "float", "min": 1, "max": 16, "default": 16, "unit": "bits", "scope": "synth"},
+  {"id": 114, "name": "fx.downsample", "kind": "int", "min": 1, "max": 64, "default": 1, "unit": "", "scope": "synth"},
+  {"id": 115, "name": "send.delay", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "gain", "scope": "synth"},
+  {"id": 116, "name": "send.reverb", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "gain", "scope": "synth"},
+  {"id": 117, "name": "send.chorus", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "gain", "scope": "synth"},
+  {"id": 120, "name": "macro.rate", "kind": "float", "min": 1, "max": 1000, "default": 50, "unit": "hz", "scope": "synth"},
+  {"id": 121, "name": "macro.sync", "kind": "bool", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 200, "name": "master.volume", "kind": "float", "min": 0, "max": 2, "default": 0.35, "unit": "gain", "scope": "all"},
+  {"id": 201, "name": "master.limiter", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "all"},
+  {"id": 202, "name": "delay.time", "kind": "float", "min": 0.001, "max": 2, "default": 0.3, "unit": "seconds", "scope": "all"},
+  {"id": 203, "name": "delay.feedback", "kind": "float", "min": 0, "max": 0.95, "default": 0.4, "unit": "", "scope": "all"},
+  {"id": 204, "name": "delay.tone", "kind": "float", "min": 200, "max": 20000, "default": 6000, "unit": "hz", "scope": "all"},
+  {"id": 205, "name": "delay.pingpong", "kind": "bool", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "all"},
+  {"id": 208, "name": "reverb.size", "kind": "float", "min": 0, "max": 1, "default": 0.6, "unit": "", "scope": "all"},
+  {"id": 209, "name": "reverb.damping", "kind": "float", "min": 0, "max": 1, "default": 0.4, "unit": "", "scope": "all"},
+  {"id": 212, "name": "chorus.rate", "kind": "float", "min": 0.05, "max": 10, "default": 0.8, "unit": "hz", "scope": "all"},
+  {"id": 213, "name": "chorus.depth", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "all"},
+  {"id": 216, "name": "voices", "kind": "int", "min": 1, "max": 64, "default": 64, "unit": "voices", "scope": "all"}
+ ],
+ "names": {"wave": {"setting": "osc1.wave", "scale": 1}, "level1": {"setting": "osc1.level", "scale": 1}, "width": {"setting": "osc1.pulse_width", "scale": 1}, "pulseWidth": {"setting": "osc1.pulse_width", "scale": 1}, "sample": {"setting": "osc1.sample", "scale": 1}, "octave": {"setting": "transpose", "scale": 12}, "pitch": {"setting": "transpose", "scale": 1}, "maxVoices": {"setting": "voices", "scale": 1}, "voices": {"setting": "unison.voices", "scale": 1}, "detune": {"setting": "unison.detune", "scale": 1}, "spread": {"setting": "unison.spread", "scale": 1}, "wave2": {"setting": "osc2.wave", "scale": 1}, "level2": {"setting": "osc2.level", "scale": 1}, "pitch2": {"setting": "osc2.coarse", "scale": 1}, "detune2": {"setting": "osc2.fine", "scale": 1}, "width2": {"setting": "osc2.pulse_width", "scale": 1}, "sync": {"setting": "osc2.sync", "scale": 1}, "ring": {"setting": "osc2.ring", "scale": 1}, "sub": {"setting": "sub.level", "scale": 1}, "noise": {"setting": "noise.level", "scale": 1}, "macroRate": {"setting": "macro.rate", "scale": 1}, "macroSync": {"setting": "macro.sync", "scale": 1}, "filter": {"setting": "filter.type", "scale": 1}, "slope": {"setting": "filter.slope", "scale": 1}, "cutoff": {"setting": "filter.cutoff", "scale": 1}, "resonance": {"setting": "filter.resonance", "scale": 1}, "keytrack": {"setting": "filter.keytrack", "scale": 1}, "sweep": {"setting": "filter.env", "scale": 1}, "sweepAttack": {"setting": "filter_env.attack", "scale": 1}, "sweepDecay": {"setting": "filter_env.decay", "scale": 1}, "sweepSustain": {"setting": "filter_env.sustain", "scale": 1}, "sweepRelease": {"setting": "filter_env.release", "scale": 1}, "attack": {"setting": "amp.attack", "scale": 1}, "decay": {"setting": "amp.decay", "scale": 1}, "sustain": {"setting": "amp.sustain", "scale": 1}, "release": {"setting": "amp.release", "scale": 1}, "curve": {"setting": "amp.curve", "scale": 1}, "pitchSweep": {"setting": "mod_env.pitch", "scale": 1}, "pitchSweepAttack": {"setting": "mod_env.attack", "scale": 1}, "pitchSweepDecay": {"setting": "mod_env.decay", "scale": 1}, "vibrato": {"setting": "lfo1.pitch", "scale": 1}, "vibratoRate": {"setting": "lfo1.rate", "scale": 1}, "vibratoDelay": {"setting": "lfo1.delay", "scale": 1}, "tremolo": {"setting": "lfo1.amp", "scale": 1}, "wobble": {"setting": "lfo2.cutoff", "scale": 1}, "wobbleRate": {"setting": "lfo2.rate", "scale": 1}, "autopan": {"setting": "lfo2.pan", "scale": 1}, "distortion": {"setting": "fx.drive", "scale": 1}, "drive": {"setting": "fx.drive", "scale": 1}, "crush": {"setting": "fx.bits", "scale": 1}, "bits": {"setting": "fx.bits", "scale": 1}, "downsample": {"setting": "fx.downsample", "scale": 1}, "echo": {"setting": "send.delay", "scale": 1}, "delay": {"setting": "send.delay", "scale": 1}, "reverb": {"setting": "send.reverb", "scale": 1}, "chorus": {"setting": "send.chorus", "scale": 1}, "masterVolume": {"setting": "master.volume", "scale": 1}, "limiter": {"setting": "master.limiter", "scale": 1}, "echoTime": {"setting": "delay.time", "scale": 1}, "echoFeedback": {"setting": "delay.feedback", "scale": 1}, "echoTone": {"setting": "delay.tone", "scale": 1}, "echoBounce": {"setting": "delay.pingpong", "scale": 1}, "reverbSize": {"setting": "reverb.size", "scale": 1}, "reverbDamping": {"setting": "reverb.damping", "scale": 1}, "chorusRate": {"setting": "chorus.rate", "scale": 1}, "chorusDepth": {"setting": "chorus.depth", "scale": 1}},
+ "choiceWords": {"square": "pulse", "sawtooth": "saw", "tri": "triangle", "sin": "sine", "low": "lowpass", "high": "highpass", "band": "bandpass", "none": "off", "hiss": "white", "chip": "lfsr", "buzz": "lfsr_short"},
+ "plain": {"filter": "lowpass", "cutoff": 20000, "resonance": 0.1},
+ "synths": {
+  "keys": {"wave": "triangle", "wave2": "sine", "level2": 0.35, "pitch2": 12, "cutoff": 3500, "sweep": 18, "sweepDecay": 0.3, "sweepSustain": 0.2, "keytrack": 0.5, "attack": 0.003, "decay": 0.45, "sustain": 0.3, "release": 0.35, "reverb": 0.12},
+  "bass": {"wave": "saw", "sub": 0.6, "cutoff": 320, "resonance": 0.3, "sweep": 30, "sweepDecay": 0.18, "sweepSustain": 0.15, "attack": 0.003, "decay": 0.2, "sustain": 0.75, "release": 0.12, "note": 36},
+  "lead": {"wave": "saw", "wave2": "square", "level2": 0.6, "detune2": 9, "cutoff": 2800, "resonance": 0.25, "keytrack": 0.5, "attack": 0.01, "decay": 0.15, "sustain": 0.7, "release": 0.2, "vibrato": 0.15, "vibratoDelay": 0.25, "vibratoRate": 5.5, "echo": 0.2},
+  "pad": {"wave": "saw", "voices": 4, "detune": 22, "spread": 0.8, "cutoff": 1600, "attack": 0.5, "decay": 0.5, "sustain": 0.8, "release": 1.2, "chorus": 0.4, "reverb": 0.4},
+  "pluck": {"wave": "saw", "cutoff": 500, "resonance": 0.2, "sweep": 48, "sweepDecay": 0.12, "sweepSustain": 0, "keytrack": 0.5, "attack": 0.001, "decay": 0.3, "sustain": 0, "release": 0.25},
+  "organ": {"wave": "sine", "wave2": "sine", "level2": 0.6, "pitch2": 12, "sub": 0.5, "attack": 0.008, "decay": 0.01, "sustain": 1, "release": 0.06, "chorus": 0.3},
+  "strings": {"wave": "saw", "voices": 3, "detune": 14, "spread": 0.6, "cutoff": 3200, "attack": 0.25, "decay": 0.3, "sustain": 0.85, "release": 0.6, "vibrato": 0.08, "vibratoDelay": 0.4, "reverb": 0.3},
+  "bell": {"wave": "sine", "wave2": "sine", "level2": 0.45, "pitch2": 19, "detune2": 2, "attack": 0.001, "decay": 1.4, "sustain": 0, "release": 1.2, "reverb": 0.3},
+  "flute": {"wave": "triangle", "noise": 0.03, "cutoff": 3000, "attack": 0.06, "decay": 0.1, "sustain": 0.9, "release": 0.15, "vibrato": 0.1, "vibratoDelay": 0.3},
+  "chip": {"wave": "square", "filter": "off", "attack": 0, "decay": 0, "sustain": 1, "release": 0.02},
+  "chipLead": {"wave": "pulse", "width": 0.25, "filter": "off", "attack": 0, "decay": 0, "sustain": 1, "release": 0.02, "vibrato": 0.2, "vibratoDelay": 0.15, "vibratoRate": 6},
+  "chipBass": {"wave": "pulse", "filter": "off", "attack": 0, "decay": 0, "sustain": 1, "release": 0.02, "note": 36, "macroRate": 4, "macro": {"steps": [{"width": 0.06}, {"width": 0.2}, {"width": 0.5}, {"width": 0.8}, {"width": 0.94}, {"width": 0.8}, {"width": 0.5}, {"width": 0.2}], "loop": true, "slide": true}},
+  "chipNoise": {"level1": 0, "noise": 1, "noise.type": "lfsr", "filter": "off", "attack": 0, "decay": 0.12, "sustain": 0, "release": 0.05},
+  "chipKick": {"wave": "triangle", "filter": "off", "attack": 0, "decay": 0.16, "sustain": 0, "release": 0.05, "note": 48, "macro": [{"wave": "square", "pitch": 12}, {"wave": "triangle", "pitch": 5}, {"wave": "triangle", "pitch": 0}, {"wave": "triangle", "pitch": -5}, {"wave": "triangle", "pitch": -10, "volume": 0.8}, {"wave": "triangle", "pitch": -14, "volume": 0.6}]},
+  "chipSnare": {"wave": "pulse", "noise.type": "lfsr", "filter": "off", "attack": 0, "decay": 0.16, "sustain": 0, "release": 0.05, "note": 57, "macro": [{"wave": "noise", "pitch": 24}, {"wave": "square", "pitch": 0}, {"wave": "square", "pitch": -5, "volume": 0.9}, {"wave": "noise", "pitch": 18, "volume": 0.8}, {"wave": "noise", "pitch": 14, "volume": 0.6}, {"wave": "noise", "pitch": 12, "volume": 0.45}]},
+  "chipHat": {"wave": "pulse", "noise.type": "lfsr", "filter": "off", "attack": 0, "decay": 0.05, "sustain": 0, "release": 0.02, "note": 72, "macro": [{"wave": "noise", "pitch": 30}, {"wave": "noise", "pitch": 26, "volume": 0.6}, {"wave": "noise", "pitch": 24, "volume": 0.3}]},
+  "kick": {"wave": "sine", "filter": "off", "pitchSweep": 30, "pitchSweepDecay": 0.06, "pitchSweepAttack": 0, "attack": 0, "decay": 0.3, "sustain": 0, "release": 0.1, "note": 36},
+  "snare": {"wave": "triangle", "level1": 0.6, "noise": 1, "filter": "highpass", "cutoff": 500, "resonance": 0.05, "pitchSweep": 12, "pitchSweepDecay": 0.04, "pitchSweepAttack": 0, "attack": 0, "decay": 0.17, "sustain": 0, "release": 0.08, "note": 52},
+  "hat": {"level1": 0, "noise": 1, "filter": "highpass", "cutoff": 7000, "attack": 0, "decay": 0.05, "sustain": 0, "release": 0.03, "note": 60},
+  "sample": {"wave": "sample", "filter": "off", "attack": 0, "decay": 0, "sustain": 1, "release": 0.03}
+ },
+ "sounds": {
+  "coin": {"patch": {"wave": "square", "filter": "off", "attack": 0, "decay": 0.3, "sustain": 0, "release": 0.2}, "notes": [[0, 83, 0.07, 0.8], [0.07, 88, 0.4, 0.8]]},
+  "jump": {"patch": {"wave": "square", "width": 0.3, "filter": "off", "attack": 0, "decay": 0.25, "sustain": 0, "release": 0.05}, "notes": [[0, 57, 0.22, 0.8, 78, 0.2]]},
+  "laser": {"patch": {"wave": "saw", "cutoff": 6000, "attack": 0, "decay": 0.24, "sustain": 0, "release": 0.05}, "notes": [[0, 98, 0.24, 0.8, 58, 0.22]]},
+  "explosion": {"patch": {"wave": "sine", "level1": 0.9, "noise": 1, "cutoff": 180, "sweep": 50, "sweepAttack": 0, "sweepDecay": 0.55, "sweepSustain": 0, "pitchSweep": 24, "pitchSweepDecay": 0.25, "pitchSweepAttack": 0, "distortion": 0.5, "attack": 0, "decay": 0.9, "sustain": 0, "release": 0.3}, "notes": [[0, 30, 0.9, 1]]},
+  "hit": {"patch": {"wave": "square", "noise.type": "lfsr", "filter": "off", "attack": 0, "decay": 0.12, "sustain": 0, "release": 0.05, "macro": [{"wave": "noise", "pitch": 12}, {"wave": "square", "pitch": 0}, {"wave": "square", "pitch": -5}, {"wave": "noise", "pitch": 4, "volume": 0.7}, {"wave": "noise", "pitch": 0, "volume": 0.5}, {"wave": "noise", "pitch": -4, "volume": 0.3}]}, "notes": [[0, 50, 0.12, 0.9]]},
+  "shoot": {"patch": {"wave": "pulse", "width": 0.25, "filter": "off", "attack": 0, "decay": 0.16, "sustain": 0, "release": 0.03, "macroRate": 60, "macro": [{"wave": "noise", "pitch": 30}, {"wave": "pulse", "pitch": 19}, {"pitch": 14}, {"pitch": 9}, {"pitch": 4}, {"pitch": 0}, {"pitch": -5, "volume": 0.8}, {"pitch": -10, "volume": 0.6}, {"pitch": -15, "volume": 0.4}]}, "notes": [[0, 76, 0.16, 0.8]]},
+  "powerup": {"patch": {"wave": "square", "filter": "off", "attack": 0, "decay": 0.2, "sustain": 0.5, "release": 0.15, "macroRate": 16, "macro": {"steps": [{"pitch": 0}, {"pitch": 4}, {"pitch": 7}, {"pitch": 12}, {"pitch": 16}, {"pitch": 19}, {"pitch": 24}, {"pitch": 19}], "loop": [6, 8]}}, "notes": [[0, 60, 0.6, 0.7]]},
+  "blip": {"patch": {"wave": "square", "filter": "off", "attack": 0, "decay": 0.06, "sustain": 0, "release": 0.02}, "notes": [[0, 81, 0.06, 0.7]]},
+  "click": {"patch": {"wave": "sine", "noise": 0.4, "filter": "off", "attack": 0, "decay": 0.015, "sustain": 0, "release": 0.01}, "notes": [[0, 96, 0.02, 0.8]]},
+  "zap": {"patch": {"wave": "saw", "cutoff": 5000, "vibrato": 7, "vibratoRate": 32, "attack": 0, "decay": 0.3, "sustain": 0, "release": 0.05}, "notes": [[0, 84, 0.3, 0.8, 55, 0.3]]},
+  "bounce": {"patch": {"wave": "sine", "filter": "off", "attack": 0, "decay": 0.14, "sustain": 0, "release": 0.04}, "notes": [[0, 55, 0.14, 0.9, 69, 0.07]]},
+  "pop": {"patch": {"wave": "sine", "filter": "off", "attack": 0, "decay": 0.07, "sustain": 0, "release": 0.02}, "notes": [[0, 70, 0.07, 0.9, 86, 0.04]]},
+  "win": {"patch": {"wave": "square", "wave2": "square", "level2": 0.5, "pitch2": 12, "filter": "off", "attack": 0, "decay": 0.3, "sustain": 0.4, "release": 0.2, "echo": 0.2}, "notes": [[0, 72, 0.1, 0.7], [0.11, 76, 0.1, 0.7], [0.22, 79, 0.1, 0.7], [0.33, 84, 0.45, 0.8]]},
+  "lose": {"patch": {"wave": "triangle", "wave2": "square", "level2": 0.3, "cutoff": 2500, "attack": 0, "decay": 0.3, "sustain": 0.5, "release": 0.2}, "notes": [[0, 67, 0.16, 0.8], [0.17, 63, 0.16, 0.8], [0.34, 60, 0.16, 0.8], [0.51, 55, 0.5, 0.8, 43, 0.5]]}
+ },
+ "chords": {"5": [0, 7], "6": [0, 4, 7, 9], "7": [0, 4, 7, 10], "9": [0, 4, 7, 10, 14], "major": [0, 4, 7], "maj": [0, 4, 7], "minor": [0, 3, 7], "min": [0, 3, 7], "m": [0, 3, 7], "dim": [0, 3, 6], "aug": [0, 4, 8], "sus2": [0, 2, 7], "sus4": [0, 5, 7], "sus": [0, 5, 7], "power": [0, 7], "octave": [0, 12], "m6": [0, 3, 7, 9], "dom7": [0, 4, 7, 10], "maj7": [0, 4, 7, 11], "m7": [0, 3, 7, 10], "min7": [0, 3, 7, 10], "dim7": [0, 3, 6, 9], "m7b5": [0, 3, 6, 10], "mmaj7": [0, 3, 7, 11], "add9": [0, 4, 7, 14], "maj9": [0, 4, 7, 11, 14], "m9": [0, 3, 7, 10, 14]},
+ "orders": {"up": 0, "down": 1, "updown": 2, "written": 3, "aswritten": 3, "given": 3, "random": 4},
+ "macroWaves": {"sine": 0, "triangle": 1, "saw": 2, "pulse": 3, "square": 3, "noise": 4}
+}
+''')
+# NAMES:END
+
+
+# ---------------------------------------------------------------- names, notes and mistakes
+
+def _key(name):
+    """A name without regard to capitals, `_`, `.`, `-` or spaces: vibrato_rate, vibratoRate and "vibrato.rate" are one."""
+    return re.sub(r"[_.\s-]", "", str(name).lower())
+
+
+def _snake(name):
+    """A name in Python's spelling: vibratoRate and "filter.cutoff" are vibrato_rate and filter_cutoff."""
+    return re.sub(r"[.\s-]+", "_", re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", name)).lower()
+
+
+def _shown(v):
+    if isinstance(v, str):
+        return json.dumps(v, ensure_ascii=False)
+    if isinstance(v, (list, tuple)):
+        return "[" + ", ".join(_shown(x) for x in v) + "]"
+    return str(v)
+
+
+def _is_number(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _clamp(v, low, high):
+    return min(high, max(low, v))
+
+
+_SETTINGS = {}      # every way a setting can be written, as _key(name) -> its entry
+_SHOWN = []         # the names to show a person: the friendly ones, then the engine's own
+_FRIENDLY = []      # the friendly ones alone
+_PRESETS = {}       # _key(name) -> the name of a ready-made synth
+_SOUNDS = {}        # _key(name) -> the name of a ready-made sound
+
+
+def _read_names():
+    by_name = {}
+    for s in _NAMES.get("settings", ()):
+        entry = dict(s, scale=1)
+        by_name[s["name"]] = entry
+        _SETTINGS[_key(s["name"])] = entry
+    friendly = []
+    for alias, to in _NAMES.get("names", {}).items():
+        entry = by_name.get(to["setting"])
+        if entry is None:
+            continue
+        _SETTINGS[_key(alias)] = entry if to.get("scale", 1) == 1 else dict(entry, scale=to["scale"])
+        friendly.append(_snake(alias))
+    _FRIENDLY[:] = friendly
+    _SHOWN[:] = friendly + [n for n in (_snake(name) for name in by_name) if n not in friendly]
+    for name in _NAMES.get("synths", {}):
+        _PRESETS[_key(name)] = name
+    for name in _NAMES.get("sounds", {}):
+        _SOUNDS[_key(name)] = name
+
+
+def _setting(name):
+    return _SETTINGS.get(_key(name)) if isinstance(name, str) else None
+
+
+def _nearest(word, names):
+    """The name in `names` nearest to `word`, when one is near enough to be what was meant."""
+    a = _key(word)
+    best = None
+    # A short word has to be very near: one slip in four letters, two in eight, three in anything longer.
+    best_cost = (1 if len(a) <= 4 else 2 if len(a) <= 8 else 3) + 1
+    for name in names:
+        b = _key(name)
+        if b.startswith(a) and len(a) >= 4:
+            return name
+        row = list(range(len(b) + 1))
+        for i in range(1, len(a) + 1):
+            last, row[0] = row[0], i
+            for j in range(1, len(b) + 1):
+                keep = row[j]
+                row[j] = min(row[j] + 1, row[j - 1] + 1, last + (0 if a[i - 1] == b[j - 1] else 1))
+                last = keep
+        if row[-1] < best_cost:
+            best_cost, best = row[-1], name
+    return best
+
+
+def _meant(word, names):
+    near = _nearest(word, names) if isinstance(word, str) else None
+    return " Did you mean %s?" % _shown(near) if near else ""
+
+
+def _setting_value(entry, value, said):
+    """A setting's value as the engine's number, from what a person wrote: a number, a choice by name ("saw"), True or False."""
+    kind, choices = entry["kind"], entry.get("choices") or []
+    if kind == "choice":
+        if isinstance(value, str):
+            word = value.lower().strip()
+            for w in (word, _NAMES.get("choiceWords", {}).get(word), word + "db"):
+                if w in choices:
+                    return choices.index(w)
+            words = [w for w, to in _NAMES.get("choiceWords", {}).items() if to in choices]
+            raise ValueError("%s: %s is not one of its choices.%s They are: %s"
+                             % (said, _shown(value), _meant(value, choices + words), ", ".join(choices)))
+        if _is_number(value) and ("%gdb" % value) in choices:
+            return choices.index("%gdb" % value)
+    if kind == "bool":
+        if value is True or value == "on":
+            return 1
+        if value is False or value == "off":
+            return 0
+    if not _is_number(value):
+        wants = ("one of " + ", ".join(choices) if kind == "choice" else "True or False" if kind == "bool"
+                 else "a number from %g to %g" % (entry["min"] / entry["scale"], entry["max"] / entry["scale"]))
+        raise ValueError("%s needs %s, not %s" % (said, wants, _shown(value)))
+    return _clamp(value * entry["scale"], entry["min"], entry["max"])
+
+
+def _patch_of(given, said, strict=True, into=None):
+    """Settings as a person wrote them -> {engine id: number}, added to `into`. A mistake is said in plain words."""
+    into = {} if into is None else into
+    for name, value in (given or {}).items():
+        if name in ("note", "preset", "macro"):
+            continue
+        entry = _setting(name)
+        if entry is None:
+            if strict:
+                raise ValueError("%s: there is no setting called %s.%s" % (said, _shown(name), _meant(name, _SHOWN)))
+            continue
+        if entry["name"].endswith(".sample"):
+            into[entry["id"]] = 0
+            continue
+        try:
+            into[entry["id"]] = _setting_value(entry, value, "%s: %s" % (said, name))
+            # "square" is the pulse wave at an even width (the width is four ids after the wave).
+            if isinstance(value, str) and value.lower().strip() == "square" and "pulse" in (entry.get("choices") or ()):
+                into[entry["id"] + 4] = 0.5
+        except ValueError:
+            if strict:
+                raise
+    return into
+
+
+def _sendable(given):
+    """Settings as they are sent: as written, with a sample given as its id."""
+    return {name: (value._sample or value._id) if isinstance(value, Synth) else value for name, value in given.items()}
+
+
+_SEMITONES = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}
+_NOTE = re.compile(r"^\s*([a-gA-G])([#b♯♭]*)(-?\d+)?\s*$")
+
+
+def note_number(note):
+    """A note as a number: "C4" is 60, "A4" is 69, "F#3" and "Bb5" work, and a number is itself."""
+    if _is_number(note):
+        return note
+    if isinstance(note, str):
+        m = _NOTE.match(note)
+        if m:
+            n = _SEMITONES[m.group(1).lower()]
+            for c in m.group(2):
+                n += 1 if c in "#♯" else -1
+            return 12 * ((4 if m.group(3) is None else int(m.group(3))) + 1) + n
+        try:
+            n = float(note)
+            if math.isfinite(n):
+                return int(n) if n == int(n) else n
+        except ValueError:
+            pass
+    raise ValueError('%s is not a note. Write a note as a name like "C4", "F#3" or "Bb5", or as a number, where 60 is middle C'
+                     % _shown(note))
+
+
+def _note_numbers(note):
+    return [note_number(n) for n in note] if isinstance(note, (list, tuple)) else [note_number(note)]
+
+
+_KINDS_SHOWN = ["major", "minor", "dim", "aug", "sus2", "sus4", "5", "6", "m6", "7", "maj7", "m7", "dim7", "m7b5",
+                "mmaj7", "add9", "9", "maj9", "m9", "octave"]
+_ROOT = re.compile(r"^\s*([a-gA-G][#b\u266f\u266d]*(?:-?\d+)?)\s*(.*?)\s*$")
+
+
+def _chord_kind(kind):
+    """The kind of chord a person named: "m7", "Maj7", "M7" (a capital M is major), "minor"."""
+    k = str(kind).strip()
+    if re.match(r"^M(?!aj|in|AJ|IN)", k):
+        k = "maj" + k[1:]
+    k = re.sub(r"[\s_-]", "", k.lower())
+    if k in ("maj", ""):
+        k = "major"
+    return _NAMES.get("chords", {}).get(k)
+
+
+def chord_notes(name, kind=None):
+    """The notes of a chord, as numbers: chord_notes("Cm7") is [60, 63, 67, 70], chord_notes("C3", "minor") is [48, 51, 55].
+    A letter followed by a number is always a note, so "C7" is the note C in octave 7: a seventh chord is "Cdom7",
+    or ("C", "7"). With no kind at all, it is a major chord."""
+    if isinstance(name, (list, tuple)):
+        return [note_number(n) for n in name]
+    root = name
+    if kind is None and isinstance(name, str):
+        m = _ROOT.match(name)
+        if m:
+            root, kind = m.group(1), m.group(2)
+    base = note_number(root)
+    steps = _chord_kind("" if kind is None else kind)
+    if steps is None:
+        raise ValueError("%s is not a kind of chord.%s The kinds are: %s"
+                         % (_shown(kind), _meant(str(kind), list(_NAMES.get("chords", {}))), ", ".join(_KINDS_SHOWN)))
+    return [base + s for s in steps]
+
+
+def _notes_of(what):
+    """What play() is given -> a list of note numbers: a note, a list of notes, or a chord by name ("Cm7")."""
+    if isinstance(what, (list, tuple)):
+        return [note_number(n) for n in what]
+    if isinstance(what, str) and not _NOTE.match(what) and re.match(r"^\s*[a-gA-G]", what):
+        m = _ROOT.match(what)
+        if m and _chord_kind(m.group(2)) is not None:
+            return chord_notes(what)
+        if m:
+            near = _nearest(m.group(2), list(_NAMES.get("chords", {})))
+            raise ValueError('%s is not a note or a chord.%s A note is written "C4" or "F#3", and a chord "Cm", "Cmaj7" or "Csus4"'
+                             % (_shown(what), " Did you mean %s?" % _shown(m.group(1) + near) if near else ""))
+    return [note_number(what)]
+
+
+def _order_of(order, said):
+    """The order of an arpeggio as the engine's number, from "up", "down", "up-down", "as written" or "random"."""
+    if order is None:
+        return 0
+    if _is_number(order) and 0 <= order <= 4:
+        return int(order)
+    found = _NAMES.get("orders", {}).get(_key(order))
+    if found is None:
+        raise ValueError("%s: %s is not an order an arpeggio can go in.%s The orders are: up, down, up-down, as written, random"
+                         % (said, _shown(order), _meant(str(order), ["up", "down", "up-down", "as written", "random"])))
+    return found
+
+
+def _chord_of(chord, kind, said):
+    """The chord an arpeggio is given -> its notes as numbers: a list of notes, a chord by name, or a root and a kind."""
+    if chord is None:
+        raise ValueError('%s needs a chord, as in %s("Cm7"), %s("C4", "minor") or %s(["C4", "E4", "G4"])' % (said, said, said, said))
+    notes = chord_notes(chord, kind)
+    if len(notes) > 8:
+        raise ValueError("%s: an arpeggio has room for 8 notes, and this chord has %d" % (said, len(notes)))
+    return notes
+
+
+def _arp_of(notes, root, speed, order, said):
+    """An arpeggio as a command carries it: semitones from the note the voice was started on, a rate and an order."""
+    offsets = [n - root for n in notes]
+    if any(v != int(v) or not -128 <= v <= 127 for v in offsets):
+        raise ValueError("%s: the notes of an arpeggio have to be whole notes within ten octaves of the first one" % said)
+    return {"offsets": [int(v) for v in offsets], "rate": 50 if speed is None else _amount(speed, "%s: speed" % said, 0.1, 1000),
+            "order": _order_of(order, said)}
+
+
+def _check_macro(macro, said):
+    """A step macro as a person wrote it: a list of steps, or {"steps", "loop", "slide", "release"}. A mistake is said here."""
+    if macro is None or macro is False:
+        return None
+    spec = {"steps": macro} if isinstance(macro, (list, tuple)) else macro
+    steps = spec.get("steps") if isinstance(spec, dict) else None
+    if not isinstance(steps, (list, tuple)) or not steps:
+        raise ValueError('%s: a macro needs a list of steps, as in [{"pitch": 0}, {"pitch": 4}, {"pitch": 7}], not %s' % (said, _shown(macro)))
+    if len(steps) > 64:
+        raise ValueError("%s: a macro has room for 64 steps, and this has %d" % (said, len(steps)))
+    waves = _NAMES.get("macroWaves", {})
+    for step in steps:
+        o = dict(zip(("wave", "pitch", "width", "cutoff", "volume"), step)) if isinstance(step, (list, tuple)) else step or {}
+        wave = o.get("wave")
+        if wave is not None and not _is_number(wave) and str(wave).lower() not in waves:
+            raise ValueError("%s: %s is not a wave a step can switch to.%s They are: %s"
+                             % (said, _shown(wave), _meant(str(wave), list(waves)), ", ".join(waves)))
+        for name in ("pitch", "width", "cutoff", "volume"):
+            if o.get(name) is not None and not _is_number(o[name]):
+                raise ValueError("%s: a step's %s needs a number, not %s" % (said, name, _shown(o[name])))
+    return macro
+
+
+def _amount(value, said, least=0, most=1):
+    if not _is_number(value):
+        raise ValueError("%s needs a number from %g to %g, not %s" % (said, least, most, _shown(value)))
+    return _clamp(value, least, most)
+
+
+def _seconds(value, said):
+    if not _is_number(value) or not value > 0:
+        raise ValueError("%s needs a number of seconds, more than 0, not %s" % (said, _shown(value)))
+    return value
+
+
+_said = set()
+
+
+def _tell(what):
+    """Each thing said once, however often it happens. It does not stop the program."""
+    if what in _said:
+        return
+    _said.add(what)
+    print("synths: " + what, file=sys.stderr)
+
+
+# ---------------------------------------------------------------- how the commands travel
+
+class _Frames:
+    """In a Pyctures scene: the commands of one frame are one batch, one command in the frame's own message."""
+
+    def __init__(self, pyctures):
+        self.p = pyctures
+        self.batch = None
+        self.into = None       # the frame's list of commands that the batch was put in
+        ending = getattr(pyctures.S, "ending", None)
+        if isinstance(ending, list):
+            ending.append(self.stamp)    # Pyctures calls it as the frame is sent
+
+    def add(self, c, clock):
+        cmds = self.p.S.cmds
+        if self.into is not cmds:
+            # The first sound of this frame. The batch is in the frame now, and is filled until the frame is sent.
+            self.batch = {"synths": COMMANDS, "now": clock(), "cmds": []}
+            self.into = cmds
+            line = getattr(self.p, "_user_line", lambda: 0)()
+            cmds.append(["call", line, 0, getattr(self.p, "H_SOUND", H_SOUND), "send", [self.batch]])
+        self.batch["cmds"].append(c)
+        # The clock when the batch leaves. A Pyctures that does not call stamp() has the time of the last command.
+        self.batch["now"] = clock()
+
+    def stamp(self):
+        if self.batch is not None and self.into is self.p.S.cmds:
+            self.batch["now"] = time.perf_counter()
+
+    def page(self, id):
+        """The page's own object for a synth (or, with no id, for all the sound): what a dial or a keyboard in the page is tied to."""
+        p = self.p
+        sound = p.JsRef(getattr(p, "H_SOUND", H_SOUND))
+        return sound.output() if id is None else sound.synth(id)
+
+
+class _Direct:
+    """For a host that was connected: each command is handed over at once, as a batch of its own."""
+
+    def __init__(self, send):
+        self.send = send
+
+    def add(self, c, clock):
+        self.send({"synths": COMMANDS, "now": clock(), "cmds": [c]})
+
+    def page(self, id):
+        return None
+
+
+class _Nowhere:
+    """No player: the program carries on, in silence."""
+
+    def add(self, c, clock):
+        pass
+
+    def page(self, id):
+        return None
+
+
+_host = [None]      # the sound of a host that called connect()
+_silent = [None]    # the sound of a program with no player
+
+
+def connect(send, ids=""):
+    """For a host: take every command yourself, as `send(batch)` is called with {"synths": 1, "now", "cmds"}.
+    `ids` begins every id made, for two programs that share one player. connect(None) undoes it."""
+    _host[0] = _Sound(_Direct(send), ids) if send is not None else None
+
+
+def _sound():
+    """The sound of the program that is running: where its commands go, and what it has made."""
+    if _host[0] is not None:
+        return _host[0]
+    # Looked up each time: in a browser every scene has its own copy of the module.
+    p = sys.modules.get("pyctures")
+    S = getattr(p, "S", None)
+    if S is not None and getattr(S, "ns", None) is not None:
+        mine = getattr(S, "_synths", None)
+        if mine is None:
+            mine = _Sound(_Frames(p))
+            S._synths = mine       # kept with the run, so a new run starts with nothing made
+        return mine
+    if _silent[0] is None:
+        _silent[0] = _Sound(_Nowhere())
+        if not (S is not None and getattr(S, "started", 0)):   # a scene that has been stopped says nothing
+            _no_player()
+    return _silent[0]
+
+
+def _no_player():
+    """A program started with plain Python: open it with Pyctures if that can be done, or say how to."""
+    main = sys.modules.get("__main__")
+    file = getattr(main, "__file__", None)
+    name = os.path.basename(file) if file else "your_program.py"
+    try:
+        import importlib.util
+        has_pyctures = importlib.util.find_spec("pyctures") is not None
+    except (ImportError, ValueError):
+        has_pyctures = False
+    started_plainly = bool(
+        file and file.endswith(".py") and os.path.isfile(file) and sys.argv
+        and os.path.abspath(sys.argv[0]) == os.path.abspath(file)
+        and not sys.flags.interactive and sys.platform != "emscripten")
+    if started_plainly and has_pyctures and not os.environ.get("SYNTHS_NO_BROWSER"):
+        print("synths: the sound is made in a web browser, so %s is being opened in one.\n"
+              "        This is the same as:  pyctures run %s\n"
+              "        Click the page to turn the sound on. Press Ctrl+C here to stop." % (name, name), file=sys.stderr)
+        import subprocess
+        try:
+            code = subprocess.call([sys.executable, "-m", "pyctures", "run", os.path.abspath(file)])
+        except KeyboardInterrupt:
+            code = 0
+        raise SystemExit(code)
+    if has_pyctures:
+        _tell("the sound is made in a web browser, so this program plays nothing when it is started with plain Python. "
+              "Run it with:  pyctures run %s" % name)
+    else:
+        _tell("the sound is made in a web browser, by Pyctures, so this program plays nothing when it is started with "
+              "plain Python. Install Pyctures (pip install pyctures) and run it with:  pyctures run %s" % name)
+
+
+# ---------------------------------------------------------------- one program's sound
+
+class _Sound:
+    def __init__(self, transport, prefix=""):
+        self.transport = transport
+        self.prefix = prefix
+        self.clock = time.perf_counter
+        self.ids = 0
+        self.handles = 0
+        self.tempo = 120
+        self.beat_zero = self.clock()
+        self.main = None
+        self.chip = None
+        self.output = None
+
+    def command(self, c):
+        self.transport.add(c, self.clock)
+
+    def id(self, letter):
+        self.ids += 1
+        return "%s%s%d" % (self.prefix, letter, self.ids)
+
+    def when(self, said, after=None, at=None, beat=None):
+        """When a call should happen, on Python's clock."""
+        for name, value in (("at", at), ("beat", beat), ("after", after)):
+            if value is not None and not _is_number(value):
+                raise ValueError("%s: %s needs a number, not %s" % (said, name, _shown(value)))
+        if at is not None:
+            return at
+        if beat is not None:
+            return self.beat_zero + beat * 60 / self.tempo
+        if after is not None:
+            return self.clock() + after
+        return self.clock()
+
+    def main_synth(self):
+        """The synth play_note and play_notes use."""
+        if self.main is None:
+            self.main = _make_synth(self, "keys", {})
+        return self.main
+
+
+def _steps_of(tune, step, hold, volume, said):
+    """ "C4 E4 G4 - C5:2", or a list of notes, chords (lists) and rests (None) -> the steps of a tune."""
+    items = [i for i in re.split(r"[\s,|]+", tune.strip()) if i] if isinstance(tune, str) else tune
+    if not isinstance(items, (list, tuple)) or not items:
+        raise ValueError('%s needs notes to play, as in play_notes("C4 E4 G4 - C5"), not %s' % (said, _shown(tune)))
+    hold = 0.9 if hold is None else _amount(hold, "%s: hold" % said, 0.01, 4)
+    vel = 0.8 if volume is None else _amount(volume, "%s: volume" % said)
+    steps = []
+    at = 0
+    for item in items:
+        what, long = item, 1
+        if isinstance(item, str):
+            m = re.match(r"^(.*?)(?::(\d*\.?\d+))?$", item)
+            what = m.group(1)
+            if m.group(2):
+                long = float(m.group(2))
+                long = int(long) if long == int(long) else long
+            if re.match(r"^[-._~]*$", what):
+                what = None
+            elif "+" in what:
+                what = what.split("+")
+        if what is not None:
+            steps.append([at * step, _notes_of(what), long * step * hold, vel])
+        at += long
+    return steps, at * step
+
+
+class Note:
+    """A note that is sounding: what start() gives back."""
+
+    def __init__(self, sound, synth, h):
+        object.__setattr__(self, "_sound", sound)
+        object.__setattr__(self, "_synth", synth)
+        object.__setattr__(self, "_h", h)
+
+    def _voice(self, **change):
+        s = self._sound
+        s.command(dict({"op": "voice", "id": self._synth, "h": self._h}, t=s.clock(), **change))
+        return self
+
+    def stop(self):
+        """Let it go: it dies away over the synth's release."""
+        s = self._sound
+        s.command({"op": "off", "id": self._synth, "h": self._h, "t": s.clock()})
+        return self
+
+    def cut(self):
+        """Cut it off at once."""
+        return self._voice(kill=True)
+
+    def slide_to(self, note, time=0):
+        """Slide to another note over that many seconds."""
+        return self._voice(pitch=note_number(note), glide=time)
+
+    def __setattr__(self, name, value):
+        if name == "pitch":
+            self.slide_to(value, 0)
+        elif name == "frequency":
+            self._voice(freq=_amount(value, "frequency", 1, 20000))
+        elif name == "volume":
+            self._voice(vol=_amount(value, "volume", 0, 4))
+        elif name == "pan":
+            self._voice(pan=_amount(value, "pan", -1, 1))
+        else:
+            object.__setattr__(self, name, value)
+
+
+class Arp(Note):
+    """An arpeggio that is sounding: what arp() and start_arp() give back. Its chord can be changed as it plays."""
+
+    def __init__(self, sound, synth, h, root, speed, order, now):
+        Note.__init__(self, sound, synth, h)
+        object.__setattr__(self, "_root", root)
+        object.__setattr__(self, "_how", [speed, order])
+        object.__setattr__(self, "_now", now)
+
+    def change(self, chord, kind=None, *, speed=None, order=None, after=None, at=None, beat=None):
+        """Another chord, without starting the note again: arp.change("Fm"), arp.change("F4", "minor"), or a list of notes."""
+        how = self._how
+        how[0] = how[0] if speed is None else speed
+        how[1] = how[1] if order is None else order
+        s = self._sound
+        s.command({"op": "voice", "id": self._synth, "h": self._h,
+                   "arp": _arp_of(_chord_of(chord, kind, "change"), self._root, how[0], how[1], "change"),
+                   "t": s.when("change", after, at, beat)})
+        object.__setattr__(self, "_now", (chord, kind))
+        return self
+
+    def __setattr__(self, name, value):
+        if name == "chord":
+            self.change(value)
+        elif name == "speed":
+            self.change(*self._now, speed=value)
+        elif name == "order":
+            self.change(*self._now, order=value)
+        else:
+            Note.__setattr__(self, name, value)
+
+
+class Tune:
+    """A tune that is playing: what play_notes() gives back."""
+
+    def __init__(self, sound, id):
+        self._sound = sound
+        self.id = id
+
+    def stop(self):
+        """Stop it. Notes it has started finish by themselves."""
+        self._sound.command({"op": "stop", "id": self.id, "t": self._sound.clock()})
+        return self
+
+
+class Song:
+    """A tracker song: what play_song() gives back."""
+
+    def __init__(self, sound, id):
+        self._sound = sound
+        self.id = id
+
+    def _do(self, what):
+        self._sound.command({"op": "song", "id": self.id, "do": what, "t": self._sound.clock()})
+        return self
+
+    def stop(self):
+        return self._do("stop")
+
+    def pause(self):
+        return self._do("pause")
+
+    def resume(self):
+        return self._do("resume")
+
+
+# What a setting is measured in, as a dial shows it (a dial in Hz turns evenly by pitch).
+_UNITS = {"hz": "Hz", "seconds": "s", "semitones": "st", "cents": "ct", "octaves": "oct"}
+
+
+class Synth:
+    """A synth. Its settings are plain attributes: lead.cutoff = 800, print(lead.cutoff)."""
+
+    def __init__(self, sound, id, patch, note, length):
+        put = object.__setattr__
+        put(self, "_sound", sound)
+        put(self, "_id", id)
+        put(self, "_patch", patch)
+        put(self, "_note", note)
+        put(self, "_length", length)
+        put(self, "_sample", None)
+        put(self, "_page", None)
+        put(self, "_macro", None)
+
+    # --- settings as attributes
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        if name == "macro":
+            return self._macro
+        entry = _setting(name)
+        if entry is None:
+            raise AttributeError("A synth has no setting called %s.%s" % (_shown(name), _meant(name, _SHOWN)))
+        value = self._patch.get(entry["id"], entry["default"])
+        if entry["kind"] == "choice":
+            return entry["choices"][int(value)]
+        if entry["kind"] == "bool":
+            return value == 1
+        if entry["scale"] != 1:
+            value = value / entry["scale"]
+        return int(value) if entry["kind"] == "int" and value == int(value) else value
+
+    def __setattr__(self, name, value):
+        if name.startswith("_"):
+            object.__setattr__(self, name, value)
+        elif name == "macro":
+            self.set_macro(value)
+        elif _setting(name) is not None:
+            self.set({name: value})
+        else:
+            # A name that is nearly a setting is a slip, and says so; any other name is the program's own to use.
+            near = _nearest(name, _SHOWN)
+            if near:
+                raise AttributeError("A synth has no setting called %s. Did you mean %s?" % (_shown(name), _shown(near)))
+            object.__setattr__(self, name, value)
+
+    def __repr__(self):
+        return "<synth %s>" % self._id
+
+    # --- notes
+    def play(self, note=None, length=None, volume=None, *, pan=None, after=None, at=None, beat=None):
+        """A note for a while: lead.play("E4", 0.5). A list of notes is a chord. No note: the synth's own (a drum's)."""
+        s = self._sound
+        c = {"op": "note", "id": self._id, "note": None if note is None else _notes_of(note),
+             "len": self._length if length is None else _seconds(length, "play: the length"),
+             "t": s.when("play", after, at, beat)}
+        if volume is not None:
+            c["vel"] = _amount(volume, "play: volume")
+        if pan is not None:
+            c["pan"] = _amount(pan, "play: pan", -1, 1)
+        s.command(c)
+        return self
+
+    def start(self, note=None, volume=None, *, pan=None, after=None, at=None, beat=None):
+        """Start a note that stays until it is stopped: note = lead.start("C4"), then note.stop()."""
+        s = self._sound
+        s.handles = 1 if s.handles >= 0x7FFFFFF0 else s.handles + 1
+        c = {"op": "note", "id": self._id, "note": None if note is None else _notes_of(note), "len": None,
+             "h": s.handles, "t": s.when("start", after, at, beat)}
+        if volume is not None:
+            c["vel"] = _amount(volume, "start: volume")
+        if pan is not None:
+            c["pan"] = _amount(pan, "start: pan", -1, 1)
+        s.command(c)
+        return Note(s, self._id, s.handles)
+
+    def arp(self, chord=None, *more, **how):
+        """A chord from one voice, as a fast arpeggio: the sound of a C64 tune. lead.arp("Cm7"), lead.arp("C4", "minor"),
+        lead.arp(["C4", "E4", "G4"]), then a length in seconds (half a second unless you say), and speed= (steps a
+        second, 50), order= ("up", "down", "up-down", "as written", "random"), volume=, pan=, after=."""
+        return self._arp(chord, more, how, "arp", 0.5)
+
+    def start_arp(self, chord=None, *more, **how):
+        """The same, staying until it is stopped: chord = lead.start_arp("Am"), chord.change("F"), chord.stop()."""
+        return self._arp(chord, more, how, "start_arp", None)
+
+    def _arp(self, chord, more, how, said, usual):
+        kind, length = how.pop("kind", None), how.pop("length", None)
+        for arg in more:       # a kind of chord (text) and a length (a number), in either order
+            if isinstance(arg, str):
+                kind = arg
+            elif _is_number(arg):
+                length = arg
+        speed, order = how.pop("speed", None), how.pop("order", None)
+        volume, pan = how.pop("volume", None), how.pop("pan", None)
+        when = {k: how.pop(k, None) for k in ("after", "at", "beat")}
+        if how:
+            raise ValueError("%s takes length, kind, speed, order, volume, pan, after, at and beat, not %s" % (said, ", ".join(how)))
+        notes = _chord_of(chord, kind, said)
+        s = self._sound
+        s.handles = 1 if s.handles >= 0x7FFFFFF0 else s.handles + 1
+        c = {"op": "note", "id": self._id, "note": [notes[0]],
+             "len": usual if length is None else _seconds(length, "%s: the length" % said), "h": s.handles,
+             "arp": _arp_of(notes, notes[0], speed, order, said), "t": s.when(said, **when)}
+        if volume is not None:
+            c["vel"] = _amount(volume, "%s: volume" % said)
+        if pan is not None:
+            c["pan"] = _amount(pan, "%s: pan" % said, -1, 1)
+        s.command(c)
+        return Arp(s, self._id, s.handles, notes[0], speed, order, (chord, kind))
+
+    def set_macro(self, macro):
+        """A step macro: a short list of steps that every note of this synth plays through, fifty a second (the setting
+        macro_rate), each changing the wave, pitch, pulse width, cutoff or volume. It is what makes chip drums.
+        lead.set_macro([{"wave": "noise", "pitch": 24}, {"wave": "square"}, {"pitch": -5, "volume": 0.8}]); None takes it away.
+        {"steps": [...], "loop": True, "slide": True, "release": a step} says more."""
+        _check_macro(macro, "set_macro")
+        object.__setattr__(self, "_macro", macro or None)
+        self._sound.command({"op": "macro", "id": self._id, "macro": macro or None, "t": self._sound.clock()})
+        return self
+
+    def stop(self, note=None):
+        """Let go of every note of this synth, or of one note: lead.stop("C4")."""
+        c = {"op": "off", "id": self._id, "t": self._sound.clock()}
+        if note is not None:
+            c["note"] = _note_numbers(note)
+        self._sound.command(c)
+        return self
+
+    def note_on(self, note, velocity=0.8):
+        """A key going down: the note stays until note_off(note). What a keyboard calls."""
+        s = self._sound
+        s.command({"op": "note", "id": self._id, "note": _note_numbers(note), "len": None,
+                   "vel": _amount(velocity, "note_on: velocity"), "t": s.clock()})
+
+    def note_off(self, note):
+        """A key coming up."""
+        self.stop(note)
+
+    def play_notes(self, notes, step=None, *, repeat=None, volume=None, hold=None, after=None, at=None, beat=None):
+        """A tune on this synth: lead.play_notes("C4 E4 G4 - C5", 0.25, repeat=True)."""
+        s = self._sound
+        said = "play_notes"
+        step = 60 / s.tempo / 2 if step is None else _seconds(step, "%s: the time of a step" % said)
+        steps, length = _steps_of(notes, step, hold, volume, said)
+        id = s.id("t")
+        times = True if repeat is True else 1 if repeat in (None, False) else _amount(repeat, "%s: repeat" % said, 1, 1e9)
+        s.command({"op": "tune", "id": id, "synth": self._id, "steps": steps, "length": length, "repeat": times,
+                   "t": s.when(said, after, at, beat)})
+        return Tune(s, id)
+
+    # --- settings
+    def set(self, settings=None, value=None, *, slide=None, after=None, at=None, beat=None, **more):
+        """Change several settings at once: lead.set(cutoff=800, resonance=0.4). slide=2 slides there over two seconds.
+        lead.set("cutoff", 800) and lead.set({"cutoff": 800}) are the same thing written other ways."""
+        if isinstance(settings, str):
+            given = {settings: value}
+        elif isinstance(settings, dict):
+            given = dict(settings)
+        elif settings is None:
+            given = {}
+        else:
+            raise ValueError("set needs settings, as in set(cutoff=800), not %s" % _shown(settings))
+        given.update(more)
+        if not given:
+            raise ValueError("set needs settings, as in set(cutoff=800)")
+        _patch_of(given, "set", True, self._patch)
+        s = self._sound
+        c = {"op": "set", "id": self._id, "set": _sendable(given), "t": s.when("set", after, at, beat)}
+        if slide is not None:
+            c["glide"] = _amount(slide, "set: slide", 0, 60)
+        s.command(c)
+        return self
+
+    def get(self, name):
+        """A setting by its name: lead.get("cutoff") is lead.cutoff."""
+        return getattr(self, name)
+
+    def describe(self, name):
+        """What a setting can be: {"min", "max", "default", "kind", "choices", "unit"}. A dial asks this."""
+        entry = _setting(name)
+        if entry is None:
+            return None
+        d = {"name": _snake(name), "kind": entry["kind"], "min": entry["min"] / entry["scale"],
+             "max": entry["max"] / entry["scale"], "default": entry["default"] / entry["scale"]}
+        if entry.get("choices"):
+            d["choices"] = list(entry["choices"])
+        unit = "octaves" if entry["scale"] == 12 else entry.get("unit")
+        if _UNITS.get(unit):
+            d["unit"] = _UNITS[unit]
+        return d
+
+    def _told(self, name, value):
+        """A control in the page changed a setting by hand: remember it, so lead.cutoff reads what the dial says."""
+        try:
+            _patch_of({name: value}, "set", False, self._patch)
+        except (ValueError, TypeError):
+            pass
+
+    @property
+    def page(self):
+        """The page's own object for this synth, in a Pyctures scene: its dials and keys act on it there, at once."""
+        if self._page is None:
+            object.__setattr__(self, "_page", self._sound.transport.page(self._id))
+        return self._page
+
+    def remove(self):
+        """Finished with it. It can still be played afterwards: it takes a place again."""
+        self._sound.command({"op": "free", "id": self._id, "t": self._sound.clock()})
+        return self
+
+
+_nothing = object()
+
+
+def _make_synth(s, preset, settings):
+    names = [_snake(n) for n in _NAMES["synths"] if n != "sample"]
+    if preset is not None:
+        found = _PRESETS.get(_key(preset)) if isinstance(preset, str) else None
+        if found is None or found == "sample":
+            raise ValueError("make_synth(%s): there is no synth called %s.%s The synths are: %s"
+                             % (_shown(preset), _shown(preset), _meant(preset, names), ", ".join(names)))
+        preset = found
+    said = "make_synth(%s)" % (_shown(_snake(preset)) if preset else "")
+    macro = settings.pop("macro", _nothing)
+    if macro is not _nothing:
+        _check_macro(macro, said)
+    patch = _patch_of(_NAMES["plain"], said, False)
+    made = _NAMES["synths"][preset] if preset else {}
+    _patch_of(made, said, False, patch)
+    _patch_of(settings, said, True, patch)
+    id = s.id("s")
+    c = {"op": "synth", "id": id, "t": s.clock()}
+    if preset:
+        c["preset"] = preset
+    if settings:
+        c["set"] = _sendable(settings)
+    if macro is not _nothing:
+        c["macro"] = macro or None
+    s.command(c)
+    synth = Synth(s, id, patch, made.get("note", 60), 0.3)
+    object.__setattr__(synth, "_macro", made.get("macro") if macro is _nothing else macro or None)
+    return synth
+
+
+# ---------------------------------------------------------------- what a program calls
+
+def make_synth(preset=None, settings=None, **more):
+    """A synth of your own: make_synth("bass"), make_synth("lead", cutoff=900), make_synth(wave="saw", attack=0.2).
+    The ready-made ones: synth_names(). The settings: setting_names()."""
+    if isinstance(preset, dict):
+        preset, settings = None, preset
+    given = dict(settings or {})
+    given.update(more)
+    if isinstance(given.get("preset"), str):
+        preset = given["preset"]
+    given.pop("preset", None)
+    if preset is not None and not isinstance(preset, str):
+        raise ValueError('make_synth needs the name of a synth or its settings, as in make_synth("bass") or '
+                         'make_synth(wave="saw"), not %s' % _shown(preset))
+    return _make_synth(_sound(), preset, given)
+
+
+def _file(path):
+    """A file's bytes as base64, when Python can read it; else None, and the page is asked to fetch it."""
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+    except OSError:
+        return None
+
+
+def load_sample(path=None, note=None, loop=None, **settings):
+    """A recorded sound from a file beside your program: drum = load_sample("kick.wav"), then drum.play().
+    It is a synth: drum.play("E4") plays it higher, drum.reverb = 0.3. loop=True goes round while a note lasts,
+    and note="A3" says what note the recording is at (C4 unless you say)."""
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError('load_sample(%s) needs the name of a sound file, as in load_sample("kick.wav")'
+                         % ("" if path is None else _shown(path)))
+    s = _sound()
+    said = "load_sample(%s)" % _shown(path)
+    patch = _patch_of(_NAMES["plain"], said, False)
+    _patch_of(_NAMES["synths"].get("sample"), said, False, patch)
+    _patch_of(settings, said, True, patch)
+    sid = s.id("w")
+    c = {"op": "sample", "id": sid, "name": path}
+    if note is not None:
+        c["note"] = note_number(note)
+    if loop:
+        c["loop"] = list(loop) if isinstance(loop, (list, tuple)) else True
+    data = _file(path)
+    if data is not None:
+        c["bytes"] = data       # Python has the file (it may be on another computer than the page)
+    else:
+        c["url"] = path         # the page fetches it from beside the scene
+    s.command(c)
+    id = s.id("s")
+    s.command({"op": "synth", "id": id, "preset": "sample", "set": dict(_sendable(settings), sample=sid), "t": s.clock()})
+    synth = Synth(s, id, patch, c.get("note", 60), None)
+    object.__setattr__(synth, "_sample", sid)
+    return synth
+
+
+def play_note(note=None, length=0.5, volume=None, *, pan=None, after=None, at=None, beat=None):
+    """A note on a pleasant synth: play_note("C4"), play_note("C4", 2, 0.3). A list of notes is a chord."""
+    if note is None:
+        raise ValueError('play_note needs a note, as in play_note("C4")')
+    _sound().main_synth().play(note, length, volume, pan=pan, after=after, at=at, beat=beat)
+
+
+def play_notes(notes=None, step=None, *, repeat=None, volume=None, hold=None, after=None, at=None, beat=None):
+    """A tune: play_notes("C4 E4 G4 - C5:2", 0.25). "-" is a rest, ":2" lasts two steps, "C4+E4" is a chord.
+    The second thing is the seconds in a step. repeat=True plays it round and round; .stop() ends it."""
+    return _sound().main_synth().play_notes(notes, step, repeat=repeat, volume=volume, hold=hold, after=after, at=at, beat=beat)
+
+
+def main_synth():
+    """The synth that play_note and play_notes use: change it (main_synth().cutoff = 900), or tie a keyboard to it."""
+    return _sound().main_synth()
+
+
+def _chip():
+    # Arpeggios with no synth named are played on a plain square wave, as a sound chip would.
+    s = _sound()
+    if s.chip is None:
+        s.chip = _make_synth(s, "chip", {})
+    return s.chip
+
+
+def play_arp(chord=None, *more, **how):
+    """A chord as a fast arpeggio on a chip sound: play_arp("Cm7"), play_arp("C4", "minor", 1, speed=30, order="down")."""
+    return _chip()._arp(chord, more, how, "play_arp", 0.5)
+
+
+def start_arp(chord=None, *more, **how):
+    """The same, staying until it is stopped, and able to change chord: chord = start_arp("Am"), chord.change("F")."""
+    return _chip()._arp(chord, more, how, "start_arp", None)
+
+
+class _Output:
+    """Everything that is sounding, as a thing a scope, a meter and dials can be tied to: what sound_output() gives."""
+
+    def __init__(self, sound):
+        self._sound = sound
+        self._values = {"volume": 1}
+        self._page = None
+
+    def describe(self, name):
+        if _key(name) == "volume":
+            return {"name": "volume", "kind": "float", "min": 0, "max": 2, "default": 1}
+        entry = _setting(name)
+        return Synth.describe(self, name) if entry is not None and entry["scope"] == "all" else None
+
+    def get(self, name):
+        entry = _setting(name)
+        return self._values.get(_key(name), entry["default"] if entry else None)
+
+    def set(self, name, value):
+        if _key(name) == "volume":
+            set_volume(value)
+        else:
+            set_effects({name: value})
+        self._values[_key(name)] = value
+
+    @property
+    def page(self):
+        """The page's own object for all the sound, in a Pyctures scene."""
+        if self._page is None:
+            self._page = self._sound.transport.page(None)
+        return self._page
+
+
+def sound_output():
+    """All the sound together: scope(sound_output()) draws it, meter(sound_output()) shows how loud it is, and
+    dial("volume", sound_output(), "volume") turns it up and down."""
+    s = _sound()
+    if s.output is None:
+        s.output = _Output(s)
+    return s.output
+
+
+def play_sound(name=None, volume=None, *, pitch=None, pan=None, after=None, at=None, beat=None):
+    """A ready-made game sound: play_sound("coin"). The sounds: sound_names()."""
+    found = _SOUNDS.get(_key(name)) if isinstance(name, str) else None
+    if found is None:
+        raise ValueError("play_sound(%s): there is no sound called %s.%s The sounds are: %s"
+                         % ("" if name is None else _shown(name), _shown(name), _meant(name, list(_NAMES["sounds"])),
+                            ", ".join(_NAMES["sounds"])))
+    s = _sound()
+    c = {"op": "sound", "name": found, "t": s.when("play_sound", after, at, beat)}
+    if volume is not None:
+        c["vol"] = _amount(volume, "play_sound: volume", 0, 4)
+    if pitch is not None:
+        c["pitch"] = _amount(pitch, "play_sound: pitch", -48, 48)
+    if pan is not None:
+        c["pan"] = _amount(pan, "play_sound: pan", -1, 1)
+    s.command(c)
+
+
+def play_song(path=None, *, loop=True, volume=None, after=None, at=None, beat=None):
+    """A tracker song (.mod, .xm). NOT READY YET: it plays nothing and says so once; the rest of your sound is not affected."""
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError('play_song(%s) needs the name of a song file, as in play_song("tune.mod")'
+                         % ("" if path is None else _shown(path)))
+    _tell("tracker songs are not ready yet in this version, so play_song plays nothing. The rest of your sound is not affected.")
+    s = _sound()
+    id = s.id("g")
+    c = {"op": "song", "id": id, "do": "play", "name": path, "loop": loop is not False, "t": s.when("play_song", after, at, beat)}
+    data = _file(path)
+    if data is not None:
+        c["bytes"] = data
+    else:
+        c["url"] = path
+    if volume is not None:
+        c["vol"] = _amount(volume, "play_song: volume", 0, 4)
+    s.command(c)
+    return Song(s, id)
+
+
+def stop_song():
+    """Stop every song."""
+    s = _sound()
+    s.command({"op": "song", "do": "stop", "t": s.clock()})
+
+
+def stop_sound():
+    """Stop everything that is sounding or waiting to sound. Synths and their settings stay."""
+    s = _sound()
+    s.command({"op": "stop", "t": s.clock()})
+
+
+def set_volume(volume):
+    """How loud everything is: 1 is normal, 0 is silent, 2 is twice as loud."""
+    s = _sound()
+    s.command({"op": "master", "volume": _amount(volume, "set_volume", 0, 4), "t": s.clock()})
+
+
+def mute_sound(on=True):
+    """Silence, until unmute_sound()."""
+    s = _sound()
+    s.command({"op": "master", "mute": bool(on), "t": s.clock()})
+
+
+def unmute_sound():
+    mute_sound(False)
+
+
+def set_effects(settings=None, **more):
+    """The effects every synth shares: set_effects(echo_time=0.3, echo_feedback=0.5, reverb_size=0.8)."""
+    if settings is not None and not isinstance(settings, dict):
+        raise ValueError("set_effects needs settings, as in set_effects(echo_time=0.3), not %s" % _shown(settings))
+    given = dict(settings or {})
+    given.update(more)
+    shared = [n for n in _FRIENDLY if _setting(n)["scope"] == "all"]
+    if not given:
+        raise ValueError("set_effects needs settings, as in set_effects(echo_time=0.3). They are: %s" % ", ".join(shared))
+    patch = _patch_of(given, "set_effects", True)
+    scope = {e["id"]: e["scope"] for e in _SETTINGS.values()}
+    if any(scope[i] != "all" for i in patch):
+        raise ValueError("set_effects is for the effects every synth shares: %s. A synth's own settings are set on "
+                         "the synth, as in lead.echo = 0.4" % ", ".join(shared))
+    s = _sound()
+    s.command({"op": "master", "set": given, "t": s.clock()})
+
+
+def set_tempo(bpm):
+    """How fast the beat is, in beats a minute. Beat 0 is now."""
+    s = _sound()
+    s.tempo = _amount(bpm, "set_tempo", 20, 400)
+    s.beat_zero = s.clock()
+
+
+def beats(n=1):
+    """How many seconds that many beats last."""
+    return n * 60 / _sound().tempo
+
+
+def beat():
+    """Which beat it is now (a fraction between beats)."""
+    s = _sound()
+    return (s.clock() - s.beat_zero) * s.tempo / 60
+
+
+def sound_time():
+    """The sound clock now, in seconds: the time that at= is read against."""
+    return _sound().clock()
+
+
+def sound_names():
+    """The names of the ready-made game sounds."""
+    return list(_NAMES["sounds"])
+
+
+def synth_names():
+    """The names of the ready-made synths."""
+    return [_snake(n) for n in _NAMES["synths"] if n != "sample"]
+
+
+def setting_names():
+    """The name of every setting a synth has."""
+    return list(_SHOWN)
+
+
+_read_names()

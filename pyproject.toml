@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synths"
-version = "0.0.0"
+version = "0.1.0"
 description = "Make sounds and music in Python: synths, samples, effects and tracker songs, for games and for fun. The sound sibling of Pyctures."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "John Wylie" }]
 keywords = ["sound", "music", "synth", "synthesizer", "tracker", "mod", "samples", "games", "audio", "education", "pyodide"]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Education",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
