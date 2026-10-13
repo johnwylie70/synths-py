@@ -18,6 +18,11 @@
     set_volume(0.5), mute_sound(), unmute_sound(), stop_sound()
     set_effects(echo_time=0.3, reverb_size=0.8)
     set_tempo(120), beats(2)               # beats(2) is how many seconds two beats last
+    lead.play_from_midi()                  # a MIDI keyboard plays a synth; lead.learn("cutoff") ties a knob to a setting
+    send_midi_note("C4", 0.8, length="quarter")    # a note out to a synth on the desk; midi_devices()
+
+    def on_midi_note(note, velocity, channel):     # in a Pyctures scene: called for every key of a MIDI keyboard
+        ...
 
 A length is seconds as a number, or a note length by name, which follows the tempo: "whole", "half",
 "quarter", "eighth", "sixteenth" (also "1/4", "q", "quarter." for a dotted one, "eighth triplet").
@@ -47,6 +52,9 @@ HOW THE COMMANDS TRAVEL (see _sound):
     call's reply and never waits for a frame of its own.
   - A host that plays the commands some other way calls connect(send), and each command is
     handed to it at once.
+  - MIDI goes the same way: its functions write `midi` commands into the same batches, and the page, where the
+    devices are, plays a synth from a keyboard itself. What was received is handed back as plain data with the
+    next frame (see _Midi), or by a host with receive_midi(events).
   - A program started with plain Python (`python tune.py`) has no player. If Pyctures is
     installed the program is started again with `pyctures run`, which opens it in a browser;
     otherwise it says how to, once, and carries on in silence.
@@ -67,7 +75,11 @@ __all__ = ["play_sound", "play_note", "play_notes", "make_synth", "load_sample",
            "stop_sound", "set_volume", "mute_sound", "unmute_sound", "set_effects", "set_tempo", "beats", "beat",
            "sound_time", "sound_names", "synth_names", "setting_names", "note_number", "chord_notes", "play_arp",
            "start_arp", "main_synth", "sound_output", "note", "chord", "rest", "start_lines", "loop_notes",
-           "length_beats"]
+           "length_beats",
+           "on_midi", "on_midi_note", "on_midi_note_off", "on_midi_control", "on_midi_devices", "use_midi_hooks",
+           "send_midi", "send_midi_note", "send_midi_note_off", "send_midi_control", "send_midi_bend",
+           "send_midi_program", "send_midi_clock", "midi_devices", "use_midi_input", "use_midi_output",
+           "receive_midi", "stop_midi"]
 
 # The version of the command format: `synths` in every batch.
 COMMANDS = 1
@@ -81,7 +93,7 @@ _NAMES = json.loads(r'''
 {
  "version": "0.1.0",
  "commands": 1,
- "engine": {"abi": 1, "version": "0.0.0", "parts": 64, "voices": 64, "samples": 1024, "events": ["note_on", "note_off", "all_notes_off", "param", "pitch_bend", "voice_pitch", "voice_freq", "voice_volume", "voice_pan", "voice_position", "voice_kill", "macro_tick", "arp", "arp_more", "song"]},
+ "engine": {"abi": 1, "version": "0.0.0", "parts": 64, "voices": 64, "samples": 1024, "events": ["note_on", "note_off", "all_notes_off", "param", "pitch_bend", "voice_pitch", "voice_freq", "voice_volume", "voice_pan", "voice_position", "voice_kill", "macro_tick", "arp", "arp_more", "song", "record"]},
  "settings": [
   {"id": 0, "name": "volume", "kind": "float", "min": 0, "max": 2, "default": 1, "unit": "gain", "scope": "synth"},
   {"id": 1, "name": "pan", "kind": "float", "min": -1, "max": 1, "default": 0, "unit": "pan", "scope": "synth"},
@@ -168,6 +180,12 @@ _NAMES = json.loads(r'''
   {"id": 103, "name": "lfo2.cutoff", "kind": "float", "min": -96, "max": 96, "default": 0, "unit": "semitones", "scope": "synth"},
   {"id": 104, "name": "lfo2.amp", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
   {"id": 105, "name": "lfo2.pan", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 106, "name": "fx.pitch", "kind": "float", "min": -12, "max": 12, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 107, "name": "fx.ring", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 108, "name": "fx.ring_freq", "kind": "float", "min": 1, "max": 5000, "default": 30, "unit": "hz", "scope": "synth"},
+  {"id": 109, "name": "fx.ring_wave", "kind": "choice", "min": 0, "max": 1, "default": 0, "unit": "", "choices": ["sine", "noise"], "scope": "synth"},
+  {"id": 110, "name": "fx.comb", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 111, "name": "fx.comb_freq", "kind": "float", "min": 50, "max": 5000, "default": 200, "unit": "hz", "scope": "synth"},
   {"id": 112, "name": "fx.drive", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
   {"id": 113, "name": "fx.bits", "kind": "float", "min": 1, "max": 16, "default": 16, "unit": "bits", "scope": "synth"},
   {"id": 114, "name": "fx.downsample", "kind": "int", "min": 1, "max": 64, "default": 1, "unit": "", "scope": "synth"},
@@ -176,6 +194,9 @@ _NAMES = json.loads(r'''
   {"id": 117, "name": "send.chorus", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "gain", "scope": "synth"},
   {"id": 120, "name": "macro.rate", "kind": "float", "min": 1, "max": 1000, "default": 50, "unit": "hz", "scope": "synth"},
   {"id": 121, "name": "macro.sync", "kind": "bool", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 122, "name": "fx.comb_feedback", "kind": "float", "min": -0.97, "max": 0.97, "default": 0.7, "unit": "", "scope": "synth"},
+  {"id": 123, "name": "fx.comb_rate", "kind": "float", "min": 0.01, "max": 10, "default": 0.3, "unit": "hz", "scope": "synth"},
+  {"id": 124, "name": "fx.comb_depth", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
   {"id": 200, "name": "master.volume", "kind": "float", "min": 0, "max": 2, "default": 0.35, "unit": "gain", "scope": "all"},
   {"id": 201, "name": "master.limiter", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "all"},
   {"id": 202, "name": "delay.time", "kind": "float", "min": 0.001, "max": 2, "default": 0.3, "unit": "seconds", "scope": "all"},
@@ -186,7 +207,12 @@ _NAMES = json.loads(r'''
   {"id": 209, "name": "reverb.damping", "kind": "float", "min": 0, "max": 1, "default": 0.4, "unit": "", "scope": "all"},
   {"id": 212, "name": "chorus.rate", "kind": "float", "min": 0.05, "max": 10, "default": 0.8, "unit": "hz", "scope": "all"},
   {"id": 213, "name": "chorus.depth", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "all"},
-  {"id": 216, "name": "voices", "kind": "int", "min": 1, "max": 64, "default": 64, "unit": "voices", "scope": "all"}
+  {"id": 216, "name": "voices", "kind": "int", "min": 1, "max": 64, "default": 64, "unit": "voices", "scope": "all"},
+  {"id": 217, "name": "input.part", "kind": "int", "min": 0, "max": 63, "default": 31, "unit": "part", "scope": "all"},
+  {"id": 218, "name": "input.gain", "kind": "float", "min": 0, "max": 8, "default": 1, "unit": "gain", "scope": "all"},
+  {"id": 219, "name": "input.monitor", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "all"},
+  {"id": 220, "name": "input.gate", "kind": "float", "min": -100, "max": 0, "default": -100, "unit": "db", "scope": "all"},
+  {"id": 221, "name": "input.gate_release", "kind": "float", "min": 0.005, "max": 2, "default": 0.15, "unit": "seconds", "scope": "all"}
  ],
  "names": {"wave": {"setting": "osc1.wave", "scale": 1}, "level1": {"setting": "osc1.level", "scale": 1}, "width": {"setting": "osc1.pulse_width", "scale": 1}, "pulseWidth": {"setting": "osc1.pulse_width", "scale": 1}, "sample": {"setting": "osc1.sample", "scale": 1}, "octave": {"setting": "transpose", "scale": 12}, "pitch": {"setting": "transpose", "scale": 1}, "maxVoices": {"setting": "voices", "scale": 1}, "voices": {"setting": "unison.voices", "scale": 1}, "detune": {"setting": "unison.detune", "scale": 1}, "spread": {"setting": "unison.spread", "scale": 1}, "wave2": {"setting": "osc2.wave", "scale": 1}, "level2": {"setting": "osc2.level", "scale": 1}, "pitch2": {"setting": "osc2.coarse", "scale": 1}, "detune2": {"setting": "osc2.fine", "scale": 1}, "width2": {"setting": "osc2.pulse_width", "scale": 1}, "sync": {"setting": "osc2.sync", "scale": 1}, "ring": {"setting": "osc2.ring", "scale": 1}, "sub": {"setting": "sub.level", "scale": 1}, "noise": {"setting": "noise.level", "scale": 1}, "macroRate": {"setting": "macro.rate", "scale": 1}, "macroSync": {"setting": "macro.sync", "scale": 1}, "filter": {"setting": "filter.type", "scale": 1}, "slope": {"setting": "filter.slope", "scale": 1}, "cutoff": {"setting": "filter.cutoff", "scale": 1}, "resonance": {"setting": "filter.resonance", "scale": 1}, "keytrack": {"setting": "filter.keytrack", "scale": 1}, "sweep": {"setting": "filter.env", "scale": 1}, "sweepAttack": {"setting": "filter_env.attack", "scale": 1}, "sweepDecay": {"setting": "filter_env.decay", "scale": 1}, "sweepSustain": {"setting": "filter_env.sustain", "scale": 1}, "sweepRelease": {"setting": "filter_env.release", "scale": 1}, "attack": {"setting": "amp.attack", "scale": 1}, "decay": {"setting": "amp.decay", "scale": 1}, "sustain": {"setting": "amp.sustain", "scale": 1}, "release": {"setting": "amp.release", "scale": 1}, "curve": {"setting": "amp.curve", "scale": 1}, "pitchSweep": {"setting": "mod_env.pitch", "scale": 1}, "pitchSweepAttack": {"setting": "mod_env.attack", "scale": 1}, "pitchSweepDecay": {"setting": "mod_env.decay", "scale": 1}, "vibrato": {"setting": "lfo1.pitch", "scale": 1}, "vibratoRate": {"setting": "lfo1.rate", "scale": 1}, "vibratoDelay": {"setting": "lfo1.delay", "scale": 1}, "tremolo": {"setting": "lfo1.amp", "scale": 1}, "wobble": {"setting": "lfo2.cutoff", "scale": 1}, "wobbleRate": {"setting": "lfo2.rate", "scale": 1}, "autopan": {"setting": "lfo2.pan", "scale": 1}, "distortion": {"setting": "fx.drive", "scale": 1}, "drive": {"setting": "fx.drive", "scale": 1}, "crush": {"setting": "fx.bits", "scale": 1}, "bits": {"setting": "fx.bits", "scale": 1}, "downsample": {"setting": "fx.downsample", "scale": 1}, "echo": {"setting": "send.delay", "scale": 1}, "delay": {"setting": "send.delay", "scale": 1}, "reverb": {"setting": "send.reverb", "scale": 1}, "chorus": {"setting": "send.chorus", "scale": 1}, "masterVolume": {"setting": "master.volume", "scale": 1}, "limiter": {"setting": "master.limiter", "scale": 1}, "echoTime": {"setting": "delay.time", "scale": 1}, "echoFeedback": {"setting": "delay.feedback", "scale": 1}, "echoTone": {"setting": "delay.tone", "scale": 1}, "echoBounce": {"setting": "delay.pingpong", "scale": 1}, "reverbSize": {"setting": "reverb.size", "scale": 1}, "reverbDamping": {"setting": "reverb.damping", "scale": 1}, "chorusRate": {"setting": "chorus.rate", "scale": 1}, "chorusDepth": {"setting": "chorus.depth", "scale": 1}},
  "choiceWords": {"square": "pulse", "sawtooth": "saw", "tri": "triangle", "sin": "sine", "low": "lowpass", "high": "highpass", "band": "bandpass", "none": "off", "hiss": "white", "chip": "lfsr", "buzz": "lfsr_short"},
@@ -233,7 +259,8 @@ _NAMES = json.loads(r'''
  "orders": {"up": 0, "down": 1, "updown": 2, "written": 3, "aswritten": 3, "given": 3, "random": 4},
  "macroWaves": {"sine": 0, "triangle": 1, "saw": 2, "pulse": 3, "square": 3, "noise": 4},
  "lengths": {"whole": 4, "half": 2, "quarter": 1, "eighth": 0.5, "sixteenth": 0.25, "thirtysecond": 0.125},
- "lengthLetters": {"w": 4, "h": 2, "q": 1, "e": 0.5, "s": 0.25, "t": 0.125}
+ "lengthLetters": {"w": 4, "h": 2, "q": 1, "e": 0.5, "s": 0.25, "t": 0.125},
+ "midi": {"types": ["noteOff", "noteOn", "notePressure", "control", "program", "pressure", "bend", "sysex", "timeCode", "songPosition", "songSelect", "tuneRequest", "clock", "start", "continue", "stop", "sensing", "reset", "other", "devices", "tempo", "learned", "set"], "does": ["devices", "listen", "input", "output", "send", "play", "through", "map", "learn", "unmap", "clock", "stop"], "functions": ["onMidi", "onMidiNote", "onMidiNoteOff", "onMidiControl", "onMidiDevices", "useMidiHooks", "sendMidi", "sendMidiNote", "sendMidiNoteOff", "sendMidiControl", "sendMidiBend", "sendMidiProgram", "sendMidiClock", "midiDevices", "useMidiInput", "useMidiOutput", "receiveMidi", "stopMidi"], "synthFunctions": ["playFromMidi", "sendToMidi", "mapMidi", "learn", "unmapMidi"]}
 }
 ''')
 # NAMES:END
@@ -624,6 +651,16 @@ class _Frames:
         sound = p.JsRef(getattr(p, "H_SOUND", H_SOUND))
         return sound.output() if id is None else sound.synth(id)
 
+    def listen(self, heard):
+        """Ask the page for what its MIDI desk says. It comes with the next frame, as a call from the page that
+        carries {"midi": the events as JSON text}, with each event's time already on Python's clock."""
+        def told(e):
+            text = e.get("midi") if hasattr(e, "get") else None
+            if text:
+                heard(json.loads(text))
+        p = self.p
+        p.JsRef(getattr(p, "H_SOUND", H_SOUND)).midi(told)
+
 
 class _Direct:
     """For a host that was connected: each command is handed over at once, as a batch of its own."""
@@ -640,6 +677,9 @@ class _Direct:
     def page(self, id):
         return None
 
+    def listen(self, heard):
+        pass        # a host hands over what its player's on_midi gave with receive_midi(events)
+
 
 class _Nowhere:
     """No player: the program carries on, in silence."""
@@ -652,6 +692,9 @@ class _Nowhere:
 
     def page(self, id):
         return None
+
+    def listen(self, heard):
+        pass
 
 
 def _turn_by_the_clock(transport, clock):
@@ -744,6 +787,13 @@ class _Sound:
         self.turn = None         # when the lines begun in this turn of the program begin
         self.turn_of = None      # what told this turn from the last (see _Frames.turn)
         self.writing = None      # inside loop_notes: synth id -> [its steps, the beat it has reached]
+        self._midi = None        # MIDI, made the first time it is used (see _Midi)
+
+    @property
+    def midi(self):
+        if self._midi is None:
+            self._midi = _Midi(self)
+        return self._midi
 
     def length(self, value, said):
         """A LENGTH is seconds as a number, or a note length by name, which is so many beats at the tempo now."""
@@ -1224,6 +1274,40 @@ class Synth:
         except (ValueError, TypeError):
             pass
 
+    # --- MIDI: a keyboard plays this synth, its notes go out as MIDI, and a knob turns a setting
+    def play_from_midi(self, on=True, *, channel=None, vibrato=None):
+        """A MIDI keyboard plays this synth: lead.play_from_midi(). It follows the notes, how hard each key is hit,
+        the pitch wheel, the modulation wheel and the sustain pedal, where the devices are, so it is as quick with
+        Python busy or on another computer. channel=2 listens to one channel alone; lead.play_from_midi(False) stops."""
+        self._sound.midi.play(self, on, channel, vibrato)
+        return self
+
+    def send_to_midi(self, on=True, *, channel=None, output=None):
+        """What this synth plays, tunes and all, also goes out as MIDI: bass.send_to_midi(channel=2).
+        bass.send_to_midi(False) stops."""
+        self._sound.midi.through(self, on, channel, output)
+        return self
+
+    def map_midi(self, control=None, setting=None, on_change=None, *, min=None, max=None, channel=None):
+        """Knob or slider number `control` turns a setting, through the setting's whole range: lead.map_midi(74, "cutoff").
+        The page changes the synth itself; lead.cutoff reads what the knob set, a frame later. A function given
+        third is called with each new value; min= and max= narrow the range."""
+        if not isinstance(control, int) or isinstance(control, bool) or not 0 <= control <= 119:
+            raise ValueError('map_midi needs the number of a knob or slider, from 0 to 119, and then a setting, as in '
+                             'lead.map_midi(74, "cutoff"), not %s' % _shown(control))
+        self._sound.midi.turn(self, "map", setting, on_change, min, max, channel, control)
+        return self
+
+    def learn(self, setting=None, on_change=None, *, min=None, max=None, channel=None):
+        """The next knob or slider that is moved turns this setting from then on: lead.learn("cutoff")."""
+        self._sound.midi.turn(self, "learn", setting, on_change, min, max, channel)
+        return self
+
+    def unmap_midi(self, setting=None):
+        """No knob turns this setting any more: lead.unmap_midi("cutoff"). With no name: none of this synth's."""
+        self._sound.midi.unmap(self, setting)
+        return self
+
     @property
     def page(self):
         """The page's own object for this synth, in a Pyctures scene: its dials and keys act on it there, at once."""
@@ -1638,6 +1722,8 @@ def set_tempo(bpm):
     s.tempo = _amount(bpm, "set_tempo", 20, 400)
     s.beat_zero = s.clock()
     s.command({"op": "tempo", "bpm": s.tempo, "t": s.beat_zero})     # tunes written in beats change speed from here on
+    if s._midi is not None and s._midi.clock_on:
+        s._midi.command({"do": "clock", "bpm": s.tempo, "t": s.clock()})     # a MIDI clock being sent keeps up
 
 
 def beats(n=1):
@@ -1669,6 +1755,419 @@ def synth_names():
 def setting_names():
     """The name of every setting a synth has."""
     return list(_SHOWN)
+
+
+# ---------------------------------------------------------------- MIDI
+#
+# MIDI is how music keyboards, drum pads, boxes of knobs and synths talk to each other and to a computer.
+# The devices are where the page is, so that is where MIDI is done (synths.js's docs/midi.md is the contract):
+#
+#   - Every function here writes a command, {"op": "midi", "do": "send", "bytes": [144, 60, 102], "t": 12.25},
+#     into the same batches as the sound's.
+#   - A keyboard plays a synth ON THE PAGE (lead.play_from_midi()), and a knob turns a setting there
+#     (lead.learn("cutoff")), without Python in between: so it feels immediate however slow or far away Python is.
+#   - What was received is handed to Python as plain data with the next frame, each message with the time it
+#     happened (on the clock that sound_time() reads), and the program's functions are called then.
+
+_MIDI_HOOKS = ("on_midi", "on_midi_note", "on_midi_note_off", "on_midi_control", "on_midi_devices")
+
+
+class MidiMessage(dict):
+    """What arrived, decoded: message.type ("noteOn", "noteOff", "control", "bend", "program", ...), message.note,
+    message.velocity, message.control, message.value, message.channel, message.time, message.device and
+    message.data (the bytes). Also message["note"]. What a kind of message does not have reads as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return self.get(name)
+
+
+def _call(fn, *args):
+    """Call a function of the program's with as many of `args` as it takes: on_midi_note(note, velocity) and
+    on_midi_note(note, velocity, channel) are both right."""
+    code = getattr(fn, "__code__", None)
+    if code is not None and not code.co_flags & 0x04:        # no *args of its own
+        takes = code.co_argcount - (1 if getattr(fn, "__self__", None) is not None else 0)
+        if takes < len(args):
+            args = args[:takes]
+    return fn(*args)
+
+
+class _Midi:
+    """One program's MIDI: the functions it gave, the devices it has been told of, and the settings tied to knobs."""
+
+    def __init__(self, sound):
+        self.sound = sound
+        self.on = {"all": [], "note": [], "note_off": [], "control": [], "devices": []}
+        self.devices = {"inputs": [], "outputs": [], "available": None}
+        self.listening = False
+        self.joined = False
+        self.asked = False
+        self.clock_on = False
+        self.bound = {}          # synth id -> setting -> [the synth, a function to call with each new value]
+        self.hooked = set()      # the scene's own functions already taken by use_midi_hooks
+
+    # Every MIDI call sends a command (which is what has the page ask for permission) and makes sure this
+    # program is handed what the page's desk says.
+    def command(self, c):
+        s = self.sound
+        s.command(dict({"op": "midi"}, **c))
+        if not self.joined:
+            self.joined = True
+            s.transport.listen(self.receive)
+
+    def ask(self):
+        if not self.asked:
+            self.asked = True
+            self.command({"do": "devices"})
+
+    def listen(self):
+        if not self.listening:
+            self.listening = True
+            self.command({"do": "listen"})
+
+    def add(self, which, fn, said, example):
+        if not callable(fn):
+            raise ValueError("%s needs a function to call, as in %s(%s), not %s" % (said, said, example, _shown(fn)))
+        if fn not in self.on[which]:
+            self.on[which].append(fn)
+        return fn
+
+    def receive(self, events):
+        """What the page's desk says happened, as a list of plain dicts: the program's functions are called with it."""
+        if isinstance(events, dict):
+            events = [events]
+        for m in events or ():
+            if not isinstance(m, dict):
+                continue
+            m = MidiMessage(m)
+            kind = m.get("type")
+            if kind == "devices":
+                self.devices = {"inputs": list(m.get("inputs") or ()), "outputs": list(m.get("outputs") or ()),
+                                "available": bool(m.get("available"))}
+                if not self.devices["available"]:
+                    _tell("there is no MIDI here, so nothing will be received or sent and the rest of the program "
+                          "carries on. MIDI works in Chrome, Edge and Firefox on a computer; Safari, iPhones and "
+                          "iPads have none for web pages.")
+                for fn in list(self.on["devices"]):
+                    _call(fn, self.devices_now())
+            elif kind == "set":
+                # A knob turned a setting on the page: the synth here is told, so that reading it back gives what it is.
+                b = self.bound.get(m.get("id"), {}).get(_key(m.get("setting")))
+                if b is not None:
+                    b[0]._told(m.get("setting"), m.get("value"))
+                    if b[1] is not None:
+                        _call(b[1], b[0].get(m.get("setting")), m.get("setting"))
+            elif kind == "noteOn":
+                for fn in list(self.on["note"]):
+                    _call(fn, m.get("note"), m.get("velocity"), m.get("channel"))
+            elif kind == "noteOff":
+                if self.on["note_off"]:
+                    for fn in list(self.on["note_off"]):
+                        _call(fn, m.get("note"), m.get("channel"))
+                else:
+                    for fn in list(self.on["note"]):
+                        _call(fn, m.get("note"), 0, m.get("channel"))
+            elif kind == "control":
+                for fn in list(self.on["control"]):
+                    _call(fn, m.get("control"), m.get("value"), m.get("channel"))
+            for fn in list(self.on["all"]):
+                _call(fn, m)
+
+    def devices_now(self):
+        d = self.devices
+        return {"inputs": list(d["inputs"]), "outputs": list(d["outputs"]), "available": d["available"]}
+
+    # --- what is written
+    def channel(self, channel, said):
+        if channel is None:
+            return 0
+        if not isinstance(channel, int) or isinstance(channel, bool) or not 1 <= channel <= 16:
+            raise ValueError("%s: channel needs a whole number from 1 to 16, not %s" % (said, _shown(channel)))
+        return channel - 1
+
+    def whole(self, value, said, what, most=127):
+        if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= most:
+            raise ValueError("%s needs %s, a whole number from 0 to %d, not %s" % (said, what, most, _shown(value)))
+        return value
+
+    def notes(self, what, said):
+        """Notes as MIDI has them: whole numbers from 0 to 127."""
+        out = []
+        for n in _notes_of(what):
+            n = int(math.floor(n + 0.5))
+            if not 0 <= n <= 127:
+                raise ValueError('%s: MIDI has the notes 0 to 127 ("C-1" to "G9"), and %s is outside them' % (said, _shown(what)))
+            out.append(n)
+        return out
+
+    def out(self, data, t, output):
+        c = {"do": "send", "bytes": data, "t": t}
+        if output is not None:
+            c["output"] = str(output)
+        self.command(c)
+
+    # --- a synth's
+    def play(self, synth, on, channel, vibrato):
+        if on is False:
+            self.command({"do": "play", "id": synth._id, "on": False})
+            return
+        c = {"do": "play", "id": synth._id,
+             "vibrato": [synth.get("vibrato") or 0, 0.5 if vibrato is None else _amount(vibrato, "play_from_midi: vibrato", 0, 12)]}
+        if channel is not None:
+            c["channel"] = self.channel(channel, "play_from_midi") + 1
+        self.command(c)
+
+    def through(self, synth, on, channel, output):
+        if on is False:
+            self.command({"do": "through", "id": synth._id, "on": False})
+            return
+        c = {"do": "through", "id": synth._id, "channel": self.channel(channel, "send_to_midi") + 1, "note": synth._note}
+        if output is not None:
+            c["output"] = str(output)
+        self.command(c)
+
+    def turn(self, synth, do, setting, on_change, low, high, channel, control=None):
+        """A setting of a synth that a knob turns: its range, and whether it moves by ratio (a pitch in Hz) or by amount."""
+        said = "learn" if do == "learn" else "map_midi"
+        if not isinstance(setting, str):
+            raise ValueError("%s needs the name of a setting, as in %s, not %s"
+                             % (said, 'lead.learn("cutoff")' if do == "learn" else 'lead.map_midi(74, "cutoff")', _shown(setting)))
+        entry = _setting(setting)
+        if entry is None:
+            raise ValueError("%s: there is no setting called %s.%s" % (said, _shown(setting), _meant(setting, _SHOWN)))
+        if on_change is not None and not callable(on_change):
+            raise ValueError("%s: what comes after the setting is a function to call with each new value, not %s" % (said, _shown(on_change)))
+        low = entry["min"] / entry["scale"] if low is None else low
+        high = entry["max"] / entry["scale"] if high is None else high
+        if not _is_number(low) or not _is_number(high):
+            raise ValueError("%s: min and max need numbers, not %s and %s" % (said, _shown(low), _shown(high)))
+        self.bound.setdefault(synth._id, {})[_key(setting)] = [synth, on_change]
+        ratio = entry.get("unit") == "hz" and entry["scale"] == 1 and low > 0 and high / low >= 100
+        c = {"do": do, "id": synth._id, "setting": setting, "min": low, "max": high, "kind": entry["kind"],
+             "curve": "exp" if ratio else "lin"}
+        if control is not None:
+            c["control"] = control
+        if channel is not None:
+            c["channel"] = self.channel(channel, said) + 1
+        self.command(c)
+
+    def unmap(self, synth, setting):
+        if setting is None:
+            self.bound.pop(synth._id, None)
+            self.command({"do": "unmap", "id": synth._id})
+        else:
+            self.bound.get(synth._id, {}).pop(_key(setting), None)
+            self.command({"do": "unmap", "id": synth._id, "setting": setting})
+
+    def choose(self, which, name, said):
+        many = which == "input" and isinstance(name, (list, tuple)) and all(isinstance(n, str) for n in name)
+        if name is not None and not isinstance(name, str) and not many:
+            raise ValueError('%s needs the name of a MIDI device, as in %s(midi_devices()["%ss"][0]), not %s'
+                             % (said, said, which, _shown(name)))
+        known = self.devices[which + "s"]
+        for n in ([] if name is None else [name] if isinstance(name, str) else name):
+            if self.devices["available"] and n not in known:
+                _tell("%s(%s): there is no MIDI %s called %s at the moment. %s. It will be used if it appears."
+                      % (said, _shown(n), which, _shown(n),
+                         "The %ss are: %s" % (which, ", ".join(_shown(k) for k in known)) if known else "No MIDI %s is plugged in" % which))
+        self.command({"do": which, "name": list(name) if many else name})
+
+    def stop(self):
+        for fns in self.on.values():
+            del fns[:]
+        self.bound.clear()
+        self.hooked.clear()
+        self.listening = self.clock_on = False
+        self.command({"do": "stop", "t": self.sound.clock()})
+
+
+def on_midi(fn=None):
+    """Everything that arrives, decoded: on_midi(heard), where heard(message) reads message.type, message.note,
+    message.velocity, message.control, message.value, message.channel, message.time and message.device.
+    In a Pyctures scene a function of your own called on_midi is called without this."""
+    m = _sound().midi
+    m.add("all", fn, "on_midi", "heard")
+    m.listen()
+    return fn
+
+
+def on_midi_note(fn=None):
+    """A key went down: on_midi_note(played), where played(note, velocity, channel) is given the note as a number
+    (60 is middle C) and how hard it was hit, from 0 to 1. A key coming up calls it with velocity 0, unless
+    on_midi_note_off is used. In a Pyctures scene a function of your own called on_midi_note is called without this."""
+    m = _sound().midi
+    m.add("note", fn, "on_midi_note", "played")
+    m.listen()
+    return fn
+
+
+def on_midi_note_off(fn=None):
+    """A key came up: on_midi_note_off(let_go), where let_go(note, channel)."""
+    m = _sound().midi
+    m.add("note_off", fn, "on_midi_note_off", "let_go")
+    m.listen()
+    return fn
+
+
+def on_midi_control(fn=None):
+    """A knob, slider or pedal moved: on_midi_control(turned), where turned(number, value, channel) is given which
+    one (0 to 127; the sustain pedal is 64) and its value, from 0 to 1."""
+    m = _sound().midi
+    m.add("control", fn, "on_midi_control", "turned")
+    m.listen()
+    return fn
+
+
+def on_midi_devices(fn=None):
+    """The devices are known, or one was plugged in or pulled out: on_midi_devices(found), where found(devices)
+    is given {"inputs": [names], "outputs": [names], "available": True or False}."""
+    m = _sound().midi
+    m.add("devices", fn, "on_midi_devices", "found")
+    if m.devices["available"] is not None:
+        _call(fn, m.devices_now())
+    else:
+        m.ask()
+    return fn
+
+
+def use_midi_hooks(scene):
+    """For an app that runs scenes: the scene's own functions called on_midi_note, on_midi_note_off, on_midi_control,
+    on_midi and on_midi_devices are called with what arrives. Give it the scene's names (a dict, a module or an
+    object). Pyctures does this for every scene, so `def on_midi_note(note, velocity, channel):` is enough.
+    Nothing is asked of the page unless the scene has at least one."""
+    if scene is None or isinstance(scene, (str, int, float)):
+        raise ValueError("use_midi_hooks needs the scene's names, with functions such as on_midi_note among them, not %s" % _shown(scene))
+    get = scene.get if isinstance(scene, dict) else lambda name: getattr(scene, name, None)
+    for name in _MIDI_HOOKS:
+        fn = get(name)
+        if not callable(fn) or fn is globals()[name]:      # `from synths import *` gave the scene this module's own
+            continue
+        m = _sound().midi
+        if (name, fn) not in m.hooked:
+            m.hooked.add((name, fn))
+            globals()[name](fn)
+
+
+def send_midi(data=None, *, output=None, after=None, at=None, beat=None):
+    """Any MIDI message at all, as its bytes: send_midi([0x90, 60, 100])."""
+    try:
+        listed = list(data) if isinstance(data, (list, tuple, bytes, bytearray)) else None
+    except TypeError:
+        listed = None
+    if not listed or any(not isinstance(b, int) or isinstance(b, bool) or not 0 <= b <= 255 for b in listed) or listed[0] < 0x80:
+        raise ValueError("send_midi needs the bytes of a MIDI message, beginning with its status byte, as in "
+                         "send_midi([0x90, 60, 100]), not %s" % _shown(data))
+    s = _sound()
+    s.midi.out(listed, s.when("send_midi", after, at, beat), output)
+
+
+def send_midi_note(note=None, velocity=0.8, length=0.5, *, channel=None, output=None, after=None, at=None, beat=None):
+    """A note out to another device: send_midi_note("C4", 0.8, length="quarter"). Velocity is how hard, from 0 to 1.
+    It is let go after `length` (seconds, or a note length by name); length=None holds it until send_midi_note_off.
+    A list of notes, or a chord by name, is a chord."""
+    said = "send_midi_note"
+    if note is None:
+        raise ValueError('send_midi_note needs a note, as in send_midi_note("C4")')
+    s = _sound()
+    m = s.midi
+    notes = m.notes(note, said)
+    velocity = _amount(velocity, "%s: velocity" % said)
+    long = None if length is None else s.length(length, "%s: the length" % said)
+    ch = m.channel(channel, said)
+    t = s.when(said, after, at, beat)
+    for n in notes:
+        if velocity > 0:
+            m.out([0x90 | ch, n, max(1, _seven(velocity))], t, output)
+        if long is not None or not velocity > 0:
+            m.out([0x80 | ch, n, 0], t + (long if velocity > 0 else 0), output)
+
+
+def send_midi_note_off(note=None, *, channel=None, output=None, after=None, at=None, beat=None):
+    """Let go of a note that send_midi_note is holding: send_midi_note_off("C4")."""
+    if note is None:
+        raise ValueError('send_midi_note_off needs a note, as in send_midi_note_off("C4")')
+    s = _sound()
+    m = s.midi
+    ch = m.channel(channel, "send_midi_note_off")
+    t = s.when("send_midi_note_off", after, at, beat)
+    for n in m.notes(note, "send_midi_note_off"):
+        m.out([0x80 | ch, n, 0], t, output)
+
+
+def send_midi_control(number=None, value=None, *, channel=None, output=None, after=None, at=None, beat=None):
+    """Turn a knob on the other device: send_midi_control(74, 0.5). The number is the control's, 0 to 127; the
+    value is from 0 to 1."""
+    said = "send_midi_control"
+    s = _sound()
+    m = s.midi
+    data = [0xb0 | m.channel(channel, said), m.whole(number, said, "the number of a control"), _seven(_amount(value, "%s: the value" % said))]
+    m.out(data, s.when(said, after, at, beat), output)
+
+
+def send_midi_bend(bend=None, *, channel=None, output=None, after=None, at=None, beat=None):
+    """Bend the pitch on the other device: send_midi_bend(0.5), from -1 to 1, and 0 to let it go back."""
+    s = _sound()
+    m = s.midi
+    b = _amount(bend, "send_midi_bend", -1, 1)
+    v = int(_clamp(math.floor(8192 + b * (8192 if b < 0 else 8191) + 0.5), 0, 16383))
+    m.out([0xe0 | m.channel(channel, "send_midi_bend"), v & 127, v >> 7], s.when("send_midi_bend", after, at, beat), output)
+
+
+def send_midi_program(number=None, *, channel=None, output=None, after=None, at=None, beat=None):
+    """Choose a sound on the other device by its number: send_midi_program(5)."""
+    s = _sound()
+    m = s.midi
+    data = [0xc0 | m.channel(channel, "send_midi_program"), m.whole(number, "send_midi_program", "the number of a sound")]
+    m.out(data, s.when("send_midi_program", after, at, beat), output)
+
+
+def send_midi_clock(on=True):
+    """Send the beat to other devices, so that their own sequencers keep time with set_tempo: send_midi_clock(),
+    and send_midi_clock(False) to stop."""
+    s = _sound()
+    s.midi.clock_on = on is not False
+    s.midi.command({"do": "clock", "on": s.midi.clock_on, "bpm": s.tempo, "t": s.clock()})
+
+
+def midi_devices():
+    """The devices there are: {"inputs": [names], "outputs": [names], "available": True, False or None}.
+    The page is asked and answers with a later frame, so the first call gives empty lists and available None:
+    use on_midi_devices(found) to be called when they are known, or ask again in update()."""
+    m = _sound().midi
+    m.ask()
+    return m.devices_now()
+
+
+def use_midi_input(name=None):
+    """Listen to one input by its name (or a list of names), instead of all of them: use_midi_input("Keystation 49").
+    No name: all again."""
+    _sound().midi.choose("input", name, "use_midi_input")
+
+
+def use_midi_output(name=None):
+    """Send to one output by its name, instead of the first: use_midi_output("Minilogue"). No name: the first again."""
+    _sound().midi.choose("output", name, "use_midi_output")
+
+
+def receive_midi(events):
+    """Hand the program a message just as the page would: receive_midi({"type": "noteOn", "note": 60, "velocity": 0.8,
+    "channel": 1}), or a list of them. A host whose player is elsewhere gives this what the player's on_midi gave;
+    a scene uses it to pretend a keyboard is there."""
+    _sound().midi.receive(events)
+
+
+def stop_midi():
+    """Finished with MIDI: every function forgotten, nothing played from a keyboard, sent on or tied to a knob,
+    and the notes sent out let go."""
+    s = _sound()
+    if s._midi is not None:
+        s._midi.stop()
+
+
+def _seven(v):
+    return int(_clamp(math.floor(v * 127 + 0.5), 0, 127))
 
 
 _read_names()
