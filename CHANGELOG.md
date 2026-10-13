@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **In step in a recorded video**: in a Pyctures scene that a recorder gives one frame at a time, the sound's clock is the scene's own stepped time (Pyctures' `S.vt`) in place of the computer's, so `sound_time()`, `beat()` and the time on every command are the video's, and the sound recorded with the pictures is in step with them to the sample. A scene's code does not change, and outside a recording nothing does.
 - The library: `play_sound`, `play_note`, `play_notes`, `make_synth`, `load_sample`, `play_song`, `stop_sound`, `stop_song`, `set_volume`, `mute_sound`, `unmute_sound`, `set_effects`, `set_tempo`, `beats`, `beat` and `sound_time`. The same names as synths.js, in Python's spelling.
 - A synth's settings are plain attributes (`lead.cutoff = 800`, `lead.vibrato_rate = 6`) that read back what was set. `lead.play`, `lead.start` (a note that stays, and can slide), `lead.stop`, `lead.play_notes`, `lead.set(cutoff=4000, slide=2)` and `lead.remove`.
 - Chords by name (`lead.play("Cm7")`, `chord_notes("C3", "minor")`), arpeggios (`lead.arp("Cm7")`, `arp = lead.start_arp("Am")` with `arp.change("F")`, `play_arp`, `start_arp`) and step macros (`make_synth("chip", macro=[…])`, `lead.macro = …`).

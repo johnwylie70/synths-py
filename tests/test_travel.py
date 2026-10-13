@@ -64,6 +64,34 @@ def test_in_a_scene_a_frame_s_sounds_are_one_command_in_the_frame(pyctures):
     assert [c["name"] for c in third[0][5][0]["cmds"]] == ["laser"]
 
 
+def test_in_a_scene_that_is_recorded_the_sound_clock_is_the_video_s(pyctures):
+    """A recorder gives the scene one frame at a time and says what time it is (vt). Every time the library
+    reads or writes is that time, however long the frames really took."""
+    scene = textwrap.dedent('''
+        from synths import *
+        lead = make_synth("lead")
+        set_tempo(120)
+        seen = []
+        def update(dt):
+            seen.append((sound_time(), beat()))
+            lead.play("C4", after=0.5)
+            print(sound_time(), beat())
+    ''')
+    if not hasattr(pyctures.S, "vt"):
+        pytest.skip("this Pyctures has no stepped clock")
+    first = json.loads(pyctures.start(scene, json.dumps({"width": 400, "height": 300, "pixel_ratio": 1, "vt": 0.0})))
+    assert first["error"] is None, first["error"]
+    made = sound_calls(json.dumps(first))[0][5][0]
+    assert made["now"] == 0.0 and all(c["t"] in (0.0, 0.5) for c in made["cmds"])
+    for n in (1, 2, 3):
+        reply = pyctures.tick(json.dumps({"dt": 1 / 30, "vt": n / 30}))
+        batch = sound_calls(reply)[0][5][0]
+        assert batch["now"] == n / 30
+        assert [c["t"] for c in batch["cmds"]] == [n / 30 + 0.5]
+        said = json.loads(reply)["out"].split()
+        assert float(said[0]) == n / 30 and abs(float(said[1]) - n / 15) < 1e-12
+
+
 def test_a_synth_s_page_is_the_page_s_object_for_it(pyctures):
     reply = pyctures.start('from synths import *\nlead = make_synth("lead")\nprint(type(lead.page).__name__)\nsame = lead.page', "{}")
     d = json.loads(reply)

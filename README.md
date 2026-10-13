@@ -745,6 +745,8 @@ No sound is worked out in Python. Each function writes a **command**, plain data
 
 Every command carries the time it was asked for on Python's clock, and every batch the clock when it was sent. The page lines that clock up with its own, so the commands of a frame, sent together when the frame ends, are played with exactly the spacing they were called with, wherever Python is running.
 
+A scene that is being recorded as a video is given one frame at a time, each exactly 1/fps after the last however long it took, and Pyctures says what time that is. The sound goes by that clock too: `sound_time()`, `beat()` and the time on every command are the video's own, so the sound in the video is in step with its pictures to the sample, and the program is not changed.
+
 How the commands travel:
 
 - **In a Pyctures scene** they ride the frame's own message. The first sound of a frame adds one command to the frame, a call of `send(batch)` on the page's sound object (Pyctures' fixed handle 10), and the rest of that frame's sounds join the batch. It is the same in a browser's own Python (`pyctures build`), in your Python (`pyctures run`), and with Python on another computer. Sound asked for at the top of the file, in `setup()` or in `on_key_down()` is inside the same call from the page, so it leaves with that call's reply.

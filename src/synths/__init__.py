@@ -43,7 +43,8 @@ answered, so no line of a program waits for the sound. A PLAYER somewhere else (
 web page) owns the sound card and carries the commands out.
 
 TIME. Each command carries the time it was asked for on Python's own clock
-(time.perf_counter()), and each batch the clock when it was sent. The player lines that clock up
+(time.perf_counter(); the video's own time in a scene that is being recorded a frame at a time), and
+each batch the clock when it was sent. The player lines that clock up
 with the sound card's and plays everything a moment late on the exact sample, so commands that
 were called at uneven moments and sent together once a frame keep exactly the spacing they had.
 
@@ -938,9 +939,16 @@ class _Frames:
         """Which turn of the program this is: a frame, or the call the page made (the top of the file, a key press)."""
         return id(self.p.S.cmds), getattr(self.p.S, "frame_no", 0)
 
+    def clock(self):
+        """The scene's clock. A scene that is being recorded as a video is given one frame at a time, each exactly
+        1/fps after the last however long it took, and Pyctures says what time that is (S.vt): the sound goes by
+        that clock too, so sound_time(), beat() and every time on a command are the video's own."""
+        stepped = getattr(self.p.S, "vt", None)
+        return time.perf_counter() if stepped is None else stepped
+
     def stamp(self):
         if self.batch is not None and self.into is self.p.S.cmds:
-            self.batch["now"] = time.perf_counter()
+            self.batch["now"] = self.clock()
 
     def page(self, id):
         """The page's own object for a synth (or, with no id, for all the sound): what a dial or a keyboard in the page is tied to."""
@@ -1114,7 +1122,7 @@ class _Sound:
     def __init__(self, transport, prefix=""):
         self.transport = transport
         self.prefix = prefix
-        self.clock = time.perf_counter
+        self.clock = getattr(transport, "clock", None) or time.perf_counter
         self.ids = 0
         self.handles = 0
         self.tempo = 120
