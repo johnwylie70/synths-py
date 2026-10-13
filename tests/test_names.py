@@ -22,7 +22,7 @@ def test_every_function_of_synths_js_has_its_python_spelling():
         pytest.skip("synths.js is not beside this repository")
     # The Python spellings synths.js itself exports: `playSound as play_sound, …`.
     spelled = set(re.findall(r"\b\w+ as ([a-z_]+)\b", text[text.rindex("export {"):]))
-    hosts = {"create_sound", "render_sound", "pack_song"}        # for a host's page: Python has connect()
+    hosts = {"create_sound", "render_sound", "pack_song", "create_stepped_player"}        # for a host's page: Python has connect()
     missing = sorted(n for n in spelled - hosts if not callable(getattr(synths, n, None)))
     assert not missing, "synths.js has these and Python does not: %s" % missing
     for name in ("beats", "beat"):
