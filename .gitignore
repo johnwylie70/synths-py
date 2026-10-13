@@ -1,0 +1,15 @@
+.venv/
+.venv*/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+site/
+.pytest_cache/
+.DS_Store
+
+# Owner notes, kept locally
+PUBLISHING.md
+.circuitry/
+.playwright-mcp/
