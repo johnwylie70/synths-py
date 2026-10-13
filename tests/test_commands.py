@@ -245,6 +245,7 @@ def test_settings_read_back_what_was_set(sent):
     assert lead.mine == 3
     assert lead.describe("cutoff") == {"name": "cutoff", "kind": "float", "min": 20, "max": 20000, "default": 2000, "unit": "Hz"}
     assert lead.describe("wave")["choices"][:3] == ["sine", "triangle", "saw"]
+    assert lead.describe("wave")["aliases"]["square"] == "pulse"
     decay = lead.describe("reverb_decay")          # 0 means something else, and the dial can reach it
     assert decay["labels"] == {0: "auto"} and decay["min"] == 0 and decay["log"] and decay["log_from"] == 0.001
     assert "labels" not in lead.describe("cutoff") and lead.describe("attack")["min"] == 0.001
