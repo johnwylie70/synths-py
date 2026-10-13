@@ -20,6 +20,12 @@
     set_tempo(120), beats(2)               # beats(2) is how many seconds two beats last
     lead.play_from_midi()                  # a MIDI keyboard plays a synth; lead.learn("cutoff") ties a knob to a setting
     send_midi_note("C4", 0.8, length="quarter")    # a note out to a synth on the desk; midi_devices()
+    mic = use_microphone()                 # the microphone is a synth whose sound comes in: mic.voice = "robot",
+    mic.listen()                           # mic.pitch = 7, mic.echo = 0.4. Nothing is heard until listen()
+    take = record_sound(3)                 # three seconds of it, as a sample, at once: take.play("E4"), take.done
+    save_sound(take, "hello.wav")          # a recording or a sample as a WAV file
+    lead.voice = "robot"                   # a voice changer on any synth; lead.pitch_shift, lead.ring_mod, lead.comb
+    lead.samples(), lead.level(), lead.notes()     # what it is doing, for your own scope, meter and lit keys
 
     def on_midi_note(note, velocity, channel):     # in a Pyctures scene: called for every key of a MIDI keyboard
         ...
@@ -55,6 +61,12 @@ HOW THE COMMANDS TRAVEL (see _sound):
   - MIDI goes the same way: its functions write `midi` commands into the same batches, and the page, where the
     devices are, plays a synth from a keyboard itself. What was received is handed back as plain data with the
     next frame (see _Midi), or by a host with receive_midi(events).
+  - WHAT COMES BACK. Commands are never answered. A few things are said by the player all the same: the
+    microphone is on or is not, a recording is over, a file is saved, and what a synth is doing now (its wave,
+    its level, its notes) and where a song is, for a program that draws them. In a Pyctures scene the page
+    hands them over with the NEXT FRAME, so each is a frame late: take.done turns True the frame after the
+    recording ended, and lead.samples() is the wave as it was a frame ago. A host hands them over with
+    receive_sound_events(events).
   - A program started with plain Python (`python tune.py`) has no player. If Pyctures is
     installed the program is started again with `pyctures run`, which opens it in a browser;
     otherwise it says how to, once, and carries on in silence.
@@ -79,7 +91,9 @@ __all__ = ["play_sound", "play_note", "play_notes", "make_synth", "load_sample",
            "on_midi", "on_midi_note", "on_midi_note_off", "on_midi_control", "on_midi_devices", "use_midi_hooks",
            "send_midi", "send_midi_note", "send_midi_note_off", "send_midi_control", "send_midi_bend",
            "send_midi_program", "send_midi_clock", "midi_devices", "use_midi_input", "use_midi_output",
-           "receive_midi", "stop_midi"]
+           "receive_midi", "stop_midi",
+           "use_microphone", "stop_microphone", "record_sound", "start_recording", "stop_recording",
+           "record_output", "save_sound", "receive_sound_events", "voice_names"]
 
 # The version of the command format: `synths` in every batch.
 COMMANDS = 1
@@ -93,7 +107,7 @@ _NAMES = json.loads(r'''
 {
  "version": "0.1.0",
  "commands": 1,
- "engine": {"abi": 1, "version": "0.0.0", "parts": 64, "voices": 64, "samples": 1024, "events": ["note_on", "note_off", "all_notes_off", "param", "pitch_bend", "voice_pitch", "voice_freq", "voice_volume", "voice_pan", "voice_position", "voice_kill", "macro_tick", "arp", "arp_more", "song"]},
+ "engine": {"abi": 1, "version": "0.0.0", "parts": 64, "voices": 64, "samples": 1024, "events": ["note_on", "note_off", "all_notes_off", "param", "pitch_bend", "voice_pitch", "voice_freq", "voice_volume", "voice_pan", "voice_position", "voice_kill", "macro_tick", "arp", "arp_more", "song", "record"]},
  "settings": [
   {"id": 0, "name": "volume", "kind": "float", "min": 0, "max": 2, "default": 1, "unit": "gain", "scope": "synth"},
   {"id": 1, "name": "pan", "kind": "float", "min": -1, "max": 1, "default": 0, "unit": "pan", "scope": "synth"},
@@ -180,6 +194,12 @@ _NAMES = json.loads(r'''
   {"id": 103, "name": "lfo2.cutoff", "kind": "float", "min": -96, "max": 96, "default": 0, "unit": "semitones", "scope": "synth"},
   {"id": 104, "name": "lfo2.amp", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
   {"id": 105, "name": "lfo2.pan", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 106, "name": "fx.pitch", "kind": "float", "min": -12, "max": 12, "default": 0, "unit": "semitones", "scope": "synth"},
+  {"id": 107, "name": "fx.ring", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 108, "name": "fx.ring_freq", "kind": "float", "min": 1, "max": 5000, "default": 30, "unit": "hz", "scope": "synth"},
+  {"id": 109, "name": "fx.ring_wave", "kind": "choice", "min": 0, "max": 1, "default": 0, "unit": "", "choices": ["sine", "noise"], "scope": "synth"},
+  {"id": 110, "name": "fx.comb", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 111, "name": "fx.comb_freq", "kind": "float", "min": 50, "max": 5000, "default": 200, "unit": "hz", "scope": "synth"},
   {"id": 112, "name": "fx.drive", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
   {"id": 113, "name": "fx.bits", "kind": "float", "min": 1, "max": 16, "default": 16, "unit": "bits", "scope": "synth"},
   {"id": 114, "name": "fx.downsample", "kind": "int", "min": 1, "max": 64, "default": 1, "unit": "", "scope": "synth"},
@@ -188,6 +208,9 @@ _NAMES = json.loads(r'''
   {"id": 117, "name": "send.chorus", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "gain", "scope": "synth"},
   {"id": 120, "name": "macro.rate", "kind": "float", "min": 1, "max": 1000, "default": 50, "unit": "hz", "scope": "synth"},
   {"id": 121, "name": "macro.sync", "kind": "bool", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
+  {"id": 122, "name": "fx.comb_feedback", "kind": "float", "min": -0.97, "max": 0.97, "default": 0.7, "unit": "", "scope": "synth"},
+  {"id": 123, "name": "fx.comb_rate", "kind": "float", "min": 0.01, "max": 10, "default": 0.3, "unit": "hz", "scope": "synth"},
+  {"id": 124, "name": "fx.comb_depth", "kind": "float", "min": 0, "max": 1, "default": 0, "unit": "", "scope": "synth"},
   {"id": 200, "name": "master.volume", "kind": "float", "min": 0, "max": 2, "default": 0.35, "unit": "gain", "scope": "all"},
   {"id": 201, "name": "master.limiter", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "all"},
   {"id": 202, "name": "delay.time", "kind": "float", "min": 0.001, "max": 2, "default": 0.3, "unit": "seconds", "scope": "all"},
@@ -198,9 +221,14 @@ _NAMES = json.loads(r'''
   {"id": 209, "name": "reverb.damping", "kind": "float", "min": 0, "max": 1, "default": 0.4, "unit": "", "scope": "all"},
   {"id": 212, "name": "chorus.rate", "kind": "float", "min": 0.05, "max": 10, "default": 0.8, "unit": "hz", "scope": "all"},
   {"id": 213, "name": "chorus.depth", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "all"},
-  {"id": 216, "name": "voices", "kind": "int", "min": 1, "max": 64, "default": 64, "unit": "voices", "scope": "all"}
+  {"id": 216, "name": "voices", "kind": "int", "min": 1, "max": 64, "default": 64, "unit": "voices", "scope": "all"},
+  {"id": 217, "name": "input.part", "kind": "int", "min": 0, "max": 63, "default": 31, "unit": "part", "scope": "all"},
+  {"id": 218, "name": "input.gain", "kind": "float", "min": 0, "max": 8, "default": 1, "unit": "gain", "scope": "all"},
+  {"id": 219, "name": "input.monitor", "kind": "bool", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "all"},
+  {"id": 220, "name": "input.gate", "kind": "float", "min": -100, "max": 0, "default": -100, "unit": "db", "scope": "all"},
+  {"id": 221, "name": "input.gate_release", "kind": "float", "min": 0.005, "max": 2, "default": 0.15, "unit": "seconds", "scope": "all"}
  ],
- "names": {"wave": {"setting": "osc1.wave", "scale": 1}, "level1": {"setting": "osc1.level", "scale": 1}, "width": {"setting": "osc1.pulse_width", "scale": 1}, "pulseWidth": {"setting": "osc1.pulse_width", "scale": 1}, "sample": {"setting": "osc1.sample", "scale": 1}, "octave": {"setting": "transpose", "scale": 12}, "pitch": {"setting": "transpose", "scale": 1}, "maxVoices": {"setting": "voices", "scale": 1}, "voices": {"setting": "unison.voices", "scale": 1}, "detune": {"setting": "unison.detune", "scale": 1}, "spread": {"setting": "unison.spread", "scale": 1}, "wave2": {"setting": "osc2.wave", "scale": 1}, "level2": {"setting": "osc2.level", "scale": 1}, "pitch2": {"setting": "osc2.coarse", "scale": 1}, "detune2": {"setting": "osc2.fine", "scale": 1}, "width2": {"setting": "osc2.pulse_width", "scale": 1}, "sync": {"setting": "osc2.sync", "scale": 1}, "ring": {"setting": "osc2.ring", "scale": 1}, "sub": {"setting": "sub.level", "scale": 1}, "noise": {"setting": "noise.level", "scale": 1}, "macroRate": {"setting": "macro.rate", "scale": 1}, "macroSync": {"setting": "macro.sync", "scale": 1}, "filter": {"setting": "filter.type", "scale": 1}, "slope": {"setting": "filter.slope", "scale": 1}, "cutoff": {"setting": "filter.cutoff", "scale": 1}, "resonance": {"setting": "filter.resonance", "scale": 1}, "keytrack": {"setting": "filter.keytrack", "scale": 1}, "sweep": {"setting": "filter.env", "scale": 1}, "sweepAttack": {"setting": "filter_env.attack", "scale": 1}, "sweepDecay": {"setting": "filter_env.decay", "scale": 1}, "sweepSustain": {"setting": "filter_env.sustain", "scale": 1}, "sweepRelease": {"setting": "filter_env.release", "scale": 1}, "attack": {"setting": "amp.attack", "scale": 1}, "decay": {"setting": "amp.decay", "scale": 1}, "sustain": {"setting": "amp.sustain", "scale": 1}, "release": {"setting": "amp.release", "scale": 1}, "curve": {"setting": "amp.curve", "scale": 1}, "pitchSweep": {"setting": "mod_env.pitch", "scale": 1}, "pitchSweepAttack": {"setting": "mod_env.attack", "scale": 1}, "pitchSweepDecay": {"setting": "mod_env.decay", "scale": 1}, "vibrato": {"setting": "lfo1.pitch", "scale": 1}, "vibratoRate": {"setting": "lfo1.rate", "scale": 1}, "vibratoDelay": {"setting": "lfo1.delay", "scale": 1}, "tremolo": {"setting": "lfo1.amp", "scale": 1}, "wobble": {"setting": "lfo2.cutoff", "scale": 1}, "wobbleRate": {"setting": "lfo2.rate", "scale": 1}, "autopan": {"setting": "lfo2.pan", "scale": 1}, "distortion": {"setting": "fx.drive", "scale": 1}, "drive": {"setting": "fx.drive", "scale": 1}, "crush": {"setting": "fx.bits", "scale": 1}, "bits": {"setting": "fx.bits", "scale": 1}, "downsample": {"setting": "fx.downsample", "scale": 1}, "echo": {"setting": "send.delay", "scale": 1}, "delay": {"setting": "send.delay", "scale": 1}, "reverb": {"setting": "send.reverb", "scale": 1}, "chorus": {"setting": "send.chorus", "scale": 1}, "masterVolume": {"setting": "master.volume", "scale": 1}, "limiter": {"setting": "master.limiter", "scale": 1}, "echoTime": {"setting": "delay.time", "scale": 1}, "echoFeedback": {"setting": "delay.feedback", "scale": 1}, "echoTone": {"setting": "delay.tone", "scale": 1}, "echoBounce": {"setting": "delay.pingpong", "scale": 1}, "reverbSize": {"setting": "reverb.size", "scale": 1}, "reverbDamping": {"setting": "reverb.damping", "scale": 1}, "chorusRate": {"setting": "chorus.rate", "scale": 1}, "chorusDepth": {"setting": "chorus.depth", "scale": 1}},
+ "names": {"wave": {"setting": "osc1.wave", "scale": 1}, "level1": {"setting": "osc1.level", "scale": 1}, "width": {"setting": "osc1.pulse_width", "scale": 1}, "pulseWidth": {"setting": "osc1.pulse_width", "scale": 1}, "sample": {"setting": "osc1.sample", "scale": 1}, "octave": {"setting": "transpose", "scale": 12}, "pitch": {"setting": "transpose", "scale": 1}, "maxVoices": {"setting": "voices", "scale": 1}, "voices": {"setting": "unison.voices", "scale": 1}, "detune": {"setting": "unison.detune", "scale": 1}, "spread": {"setting": "unison.spread", "scale": 1}, "wave2": {"setting": "osc2.wave", "scale": 1}, "level2": {"setting": "osc2.level", "scale": 1}, "pitch2": {"setting": "osc2.coarse", "scale": 1}, "detune2": {"setting": "osc2.fine", "scale": 1}, "width2": {"setting": "osc2.pulse_width", "scale": 1}, "sync": {"setting": "osc2.sync", "scale": 1}, "ring": {"setting": "osc2.ring", "scale": 1}, "sub": {"setting": "sub.level", "scale": 1}, "noise": {"setting": "noise.level", "scale": 1}, "macroRate": {"setting": "macro.rate", "scale": 1}, "macroSync": {"setting": "macro.sync", "scale": 1}, "filter": {"setting": "filter.type", "scale": 1}, "slope": {"setting": "filter.slope", "scale": 1}, "cutoff": {"setting": "filter.cutoff", "scale": 1}, "resonance": {"setting": "filter.resonance", "scale": 1}, "keytrack": {"setting": "filter.keytrack", "scale": 1}, "sweep": {"setting": "filter.env", "scale": 1}, "sweepAttack": {"setting": "filter_env.attack", "scale": 1}, "sweepDecay": {"setting": "filter_env.decay", "scale": 1}, "sweepSustain": {"setting": "filter_env.sustain", "scale": 1}, "sweepRelease": {"setting": "filter_env.release", "scale": 1}, "attack": {"setting": "amp.attack", "scale": 1}, "decay": {"setting": "amp.decay", "scale": 1}, "sustain": {"setting": "amp.sustain", "scale": 1}, "release": {"setting": "amp.release", "scale": 1}, "curve": {"setting": "amp.curve", "scale": 1}, "pitchSweep": {"setting": "mod_env.pitch", "scale": 1}, "pitchSweepAttack": {"setting": "mod_env.attack", "scale": 1}, "pitchSweepDecay": {"setting": "mod_env.decay", "scale": 1}, "vibrato": {"setting": "lfo1.pitch", "scale": 1}, "vibratoRate": {"setting": "lfo1.rate", "scale": 1}, "vibratoDelay": {"setting": "lfo1.delay", "scale": 1}, "tremolo": {"setting": "lfo1.amp", "scale": 1}, "wobble": {"setting": "lfo2.cutoff", "scale": 1}, "wobbleRate": {"setting": "lfo2.rate", "scale": 1}, "autopan": {"setting": "lfo2.pan", "scale": 1}, "pwm": {"setting": "lfo2.pulse_width", "scale": 1}, "pwmRate": {"setting": "lfo2.rate", "scale": 1}, "distortion": {"setting": "fx.drive", "scale": 1}, "drive": {"setting": "fx.drive", "scale": 1}, "crush": {"setting": "fx.bits", "scale": 1}, "bits": {"setting": "fx.bits", "scale": 1}, "downsample": {"setting": "fx.downsample", "scale": 1}, "pitchShift": {"setting": "fx.pitch", "scale": 1}, "ringMod": {"setting": "fx.ring", "scale": 1}, "ringSpeed": {"setting": "fx.ring_freq", "scale": 1}, "ringWave": {"setting": "fx.ring_wave", "scale": 1}, "comb": {"setting": "fx.comb", "scale": 1}, "combTone": {"setting": "fx.comb_freq", "scale": 1}, "combFeedback": {"setting": "fx.comb_feedback", "scale": 1}, "flanger": {"setting": "fx.comb_depth", "scale": 1}, "flangerRate": {"setting": "fx.comb_rate", "scale": 1}, "reverse": {"setting": "osc1.reverse", "scale": 1}, "echo": {"setting": "send.delay", "scale": 1}, "delay": {"setting": "send.delay", "scale": 1}, "reverb": {"setting": "send.reverb", "scale": 1}, "chorus": {"setting": "send.chorus", "scale": 1}, "masterVolume": {"setting": "master.volume", "scale": 1}, "limiter": {"setting": "master.limiter", "scale": 1}, "echoTime": {"setting": "delay.time", "scale": 1}, "echoFeedback": {"setting": "delay.feedback", "scale": 1}, "echoTone": {"setting": "delay.tone", "scale": 1}, "echoBounce": {"setting": "delay.pingpong", "scale": 1}, "reverbSize": {"setting": "reverb.size", "scale": 1}, "reverbDamping": {"setting": "reverb.damping", "scale": 1}, "chorusRate": {"setting": "chorus.rate", "scale": 1}, "chorusDepth": {"setting": "chorus.depth", "scale": 1}, "micGain": {"setting": "input.gain", "scale": 1}, "micGate": {"setting": "input.gate", "scale": 1}, "micGateRelease": {"setting": "input.gate_release", "scale": 1}},
  "choiceWords": {"square": "pulse", "sawtooth": "saw", "tri": "triangle", "sin": "sine", "low": "lowpass", "high": "highpass", "band": "bandpass", "none": "off", "hiss": "white", "chip": "lfsr", "buzz": "lfsr_short"},
  "plain": {"filter": "lowpass", "cutoff": 20000, "resonance": 0.1},
  "synths": {
@@ -246,7 +274,10 @@ _NAMES = json.loads(r'''
  "macroWaves": {"sine": 0, "triangle": 1, "saw": 2, "pulse": 3, "square": 3, "noise": 4},
  "lengths": {"whole": 4, "half": 2, "quarter": 1, "eighth": 0.5, "sixteenth": 0.25, "thirtysecond": 0.125},
  "lengthLetters": {"w": 4, "h": 2, "q": 1, "e": 0.5, "s": 0.25, "t": 0.125},
- "midi": {"types": ["noteOff", "noteOn", "notePressure", "control", "program", "pressure", "bend", "sysex", "timeCode", "songPosition", "songSelect", "tuneRequest", "clock", "start", "continue", "stop", "sensing", "reset", "other", "devices", "tempo", "learned", "set"], "does": ["devices", "listen", "input", "output", "send", "play", "through", "map", "learn", "unmap", "clock", "stop"], "functions": ["onMidi", "onMidiNote", "onMidiNoteOff", "onMidiControl", "onMidiDevices", "useMidiHooks", "sendMidi", "sendMidiNote", "sendMidiNoteOff", "sendMidiControl", "sendMidiBend", "sendMidiProgram", "sendMidiClock", "midiDevices", "useMidiInput", "useMidiOutput", "receiveMidi", "stopMidi"], "synthFunctions": ["playFromMidi", "sendToMidi", "mapMidi", "learn", "unmapMidi"]}
+ "midi": {"types": ["noteOff", "noteOn", "notePressure", "control", "program", "pressure", "bend", "sysex", "timeCode", "songPosition", "songSelect", "tuneRequest", "clock", "start", "continue", "stop", "sensing", "reset", "other", "devices", "tempo", "learned", "set"], "does": ["devices", "listen", "input", "output", "send", "play", "through", "map", "learn", "unmap", "clock", "stop"], "functions": ["onMidi", "onMidiNote", "onMidiNoteOff", "onMidiControl", "onMidiDevices", "useMidiHooks", "sendMidi", "sendMidiNote", "sendMidiNoteOff", "sendMidiControl", "sendMidiBend", "sendMidiProgram", "sendMidiClock", "midiDevices", "useMidiInput", "useMidiOutput", "receiveMidi", "stopMidi"], "synthFunctions": ["playFromMidi", "sendToMidi", "mapMidi", "learn", "unmapMidi"]},
+ "voices": {"robot": {"help": "A machine: the voice multiplied by a 50 Hz wave, ringing in a metal pipe.", "values": {"fx.ring": 1, "fx.ring_freq": 50, "fx.comb": 0.45, "fx.comb_freq": 110, "fx.comb_feedback": 0.8, "fx.bits": 10}}, "chipmunk": {"help": "Small and squeaky: everything seven semitones higher.", "values": {"fx.pitch": 7}}, "monster": {"help": "Huge and deep: seven semitones lower, with a growl and a little room.", "values": {"fx.pitch": -7, "fx.drive": 0.25, "send.reverb": 0.25, "reverb.size": 0.7, "reverb.damping": 0.6}}, "cave": {"help": "Far inside a cave: long echoes and a very big room.", "values": {"send.delay": 0.5, "send.reverb": 0.7, "delay.time": 0.38, "delay.feedback": 0.55, "delay.tone": 2500, "reverb.size": 0.92, "reverb.damping": 0.3}}, "telephone": {"help": "Down an old phone line: only the middle of the voice, coarse and a little crushed.", "values": {"filter.type": 3, "filter.slope": 1, "filter.cutoff": 1200, "filter.resonance": 0.2, "fx.drive": 0.2, "fx.bits": 8, "fx.downsample": 6}}, "alien": {"help": "Not from here: higher, multiplied by a 180 Hz wave, with a slow metallic sweep.", "values": {"fx.pitch": 4, "fx.ring": 0.8, "fx.ring_freq": 180, "fx.comb": 0.4, "fx.comb_freq": 600, "fx.comb_feedback": 0.75, "fx.comb_rate": 0.4, "fx.comb_depth": 0.5, "send.chorus": 0.4}}, "whisper": {"help": "Hoarse and breathy: the voice's pitch blurred into noise, with its low end taken off.", "values": {"filter.type": 2, "filter.cutoff": 500, "filter.resonance": 0, "fx.ring": 1, "fx.ring_wave": 1, "fx.ring_freq": 350}}},
+ "song": {"does": ["play", "resume", "pause", "stop", "seek", "volume", "repeat", "mute", "solo", "loopPattern", "replace"], "functions": ["stop", "pause", "resume", "seek", "mute", "unmute", "solo", "loopPattern", "replace"]},
+ "microphone": {"names": {"pitch": "pitchShift", "ring": "ringMod", "gain": "micGain", "gate": "micGate", "gaterelease": "micGateRelease"}, "gate": -50, "states": ["asking", "on", "refused", "none", "busy", "unavailable", "off"], "functions": ["useMicrophone", "stopMicrophone", "recordSound", "startRecording", "stopRecording", "recordOutput", "saveSound", "receiveSoundEvents", "voiceNames"], "micFunctions": ["listen", "mute", "record", "whenReady", "close"], "takeFunctions": ["onDone", "whenDone", "stopRecording"], "events": ["microphone", "recorded", "saved"], "longestRecording": 120, "usualRecording": 30}
 }
 ''')
 # NAMES:END
@@ -285,6 +316,10 @@ _SHOWN = []         # the names to show a person: the friendly ones, then the en
 _FRIENDLY = []      # the friendly ones alone
 _PRESETS = {}       # _key(name) -> the name of a ready-made synth
 _SOUNDS = {}        # _key(name) -> the name of a ready-made sound
+_DEFAULTS = {}      # engine id -> the engine's own value for a setting
+_BY_ID = {}         # engine id -> the engine's name for a setting
+_VOICES = {"rows": {}, "all": []}    # the voice changers: name -> {engine id: value}, and every id any of them sets
+_MIC_NAMES = {}     # a setting as the microphone says it (_key) -> the name every synth knows it by
 
 
 def _read_names():
@@ -306,6 +341,15 @@ def _read_names():
         _PRESETS[_key(name)] = name
     for name in _NAMES.get("sounds", {}):
         _SOUNDS[_key(name)] = name
+    for s in _NAMES.get("settings", ()):
+        _DEFAULTS[s["id"]] = s["default"]
+        _BY_ID[s["id"]] = s["name"]
+    every = []
+    for name, voice in _NAMES.get("voices", {}).items():
+        row = _VOICES["rows"][name] = _patch_of(voice.get("values"), name, False)
+        every.extend(pid for pid in row if pid not in every)
+    _VOICES["all"] = every
+    _MIC_NAMES.update(_NAMES.get("microphone", {}).get("names", {}))
 
 
 def _setting(name):
@@ -388,6 +432,36 @@ def _patch_of(given, said, strict=True, into=None):
             if strict:
                 raise
     return into
+
+
+_NO_VOICE = ("none", "plain", "off", "normal", "")
+
+
+def _voice_name(name):
+    """A voice's name as written -> its name here, "none" for the plain voice, or None for a name that is not a voice."""
+    if name is None or name is False:
+        return "none"
+    k = _key(name)
+    return "none" if k in _NO_VOICE else k if k in _VOICES["rows"] else None
+
+
+def _wear_voice(worn, patch, name):
+    """PUT A VOICE ON, as synths.js does (its wearVoice; the rule is in docs/commands.md under `set`). `worn` is
+    what is remembered between voices ({"voice", "under"}) and `patch` the settings by engine id. The first voice
+    keeps what the settings it may touch were; every voice after starts by putting those back, and "none" is how
+    things were before any. A setting of the whole engine (the echo's time, the reverb's size) is touched only if
+    this voice or the last names it. The player does the same from the one word sent, so only `patch` changes here."""
+    rows, every = _VOICES["rows"], _VOICES["all"]
+    row, last = rows.get(name, {}), rows.get(worn["voice"], {})
+    if worn["under"] is None:
+        worn["under"] = {pid: patch[pid] for pid in every if pid in patch}
+    for pid in every:
+        if pid >= 200 and pid not in row and pid not in last:
+            continue
+        patch[pid] = row[pid] if pid in row else worn["under"].get(pid, _DEFAULTS.get(pid))
+    worn["voice"] = name
+    if name == "none":
+        worn["under"] = None
 
 
 def _sendable(given):
@@ -647,6 +721,30 @@ class _Frames:
         p = self.p
         p.JsRef(getattr(p, "H_SOUND", H_SOUND)).midi(told)
 
+    def hear(self, heard):
+        """Ask the page for what its player says back (the microphone, a recording that is over, a saved file) and
+        for what was asked to be watched. It comes with the next frame, as {"sound": the events as JSON text}."""
+        def told(e):
+            text = e.get("sound") if hasattr(e, "get") else None
+            if text:
+                heard(json.loads(text))
+        p = self.p
+        p.JsRef(getattr(p, "H_SOUND", H_SOUND)).events(told)
+
+    def watch(self, id, what="reading"):
+        """Ask the page to say, with every frame for a while, what a synth is doing (no id: all the sound), or
+        where the song is. Asked again twice a second while a program goes on reading."""
+        p = self.p
+        sound = p.JsRef(getattr(p, "H_SOUND", H_SOUND))
+        if what == "position":
+            sound.watchSong()
+        else:
+            sound.watch(id)
+
+    def keeps_files(self):
+        """Whether Python has real files beside the scene (`pyctures run`); in a browser the page keeps them."""
+        return not getattr(self.p.S, "page_files", False)
+
 
 class _Direct:
     """For a host that was connected: each command is handed over at once, as a batch of its own."""
@@ -666,6 +764,15 @@ class _Direct:
     def listen(self, heard):
         pass        # a host hands over what its player's on_midi gave with receive_midi(events)
 
+    def hear(self, heard):
+        pass        # and what its player's on_sound_events gave with receive_sound_events(events)
+
+    def watch(self, id, what="reading"):
+        pass
+
+    def keeps_files(self):
+        return False
+
 
 class _Nowhere:
     """No player: the program carries on, in silence."""
@@ -681,6 +788,15 @@ class _Nowhere:
 
     def listen(self, heard):
         pass
+
+    def hear(self, heard):
+        pass
+
+    def watch(self, id, what="reading"):
+        pass
+
+    def keeps_files(self):
+        return False
 
 
 def _turn_by_the_clock(transport, clock):
@@ -774,6 +890,14 @@ class _Sound:
         self.turn_of = None      # what told this turn from the last (see _Frames.turn)
         self.writing = None      # inside loop_notes: synth id -> [its steps, the beat it has reached]
         self._midi = None        # MIDI, made the first time it is used (see _Midi)
+        self.mic = None          # the microphone, once it has been asked for
+        self.takes = {}          # sample id -> a recording that is being made
+        self.saves = {}          # the number of a save_sound -> what it gave back
+        self.asks = 0
+        self.hearing = False     # the page has been asked for what its player says back
+        self.readings = {}       # synth id ("" for all the sound) -> what it was doing when the page last said
+        self.watched = {}        # what the page was asked to watch -> when it was last asked
+        self.position = dict(_NO_SONG)
 
     @property
     def midi(self):
@@ -821,6 +945,50 @@ class _Sound:
     def command(self, c):
         self.transport.add(c, self.clock)
 
+    def hear_back(self):
+        """Make sure this program is handed what the player says back. Asked once, the first time something needs it."""
+        if not self.hearing:
+            self.hearing = True
+            self.transport.hear(self.receive)
+
+    def watch(self, key, id, what="reading"):
+        now = self.clock()
+        if now - self.watched.get(key, -10) > 0.5:
+            self.watched[key] = now
+            self.hear_back()
+            self.transport.watch(id, what)
+
+    def reading(self, id):
+        """What a synth is doing, as the page last said: {"samples", "level", "notes"}. Nothing yet: empty."""
+        key = id or ""
+        self.watch(key, id)
+        return self.readings.get(key, _NO_READING)
+
+    def receive(self, events):
+        """What the player says back, as a list of plain dicts (see receive_sound_events)."""
+        if isinstance(events, dict):
+            events = [events]
+        for e in events or ():
+            if not isinstance(e, dict):
+                continue
+            kind = e.get("type")
+            if kind == "recorded":
+                take = self.takes.pop(e.get("id"), None)
+                if take is not None:
+                    take._finish(e)
+            elif kind == "saved":
+                saved = self.saves.pop(e.get("ask"), None)
+                if saved is not None:
+                    saved._finish(e)
+            elif kind == "microphone":
+                if self.mic is not None:
+                    self.mic._said(e)
+            elif kind == "reading":
+                self.readings[e.get("id") or ""] = {"samples": list(e.get("samples") or ()), "level": list(e.get("level") or (0, 0)),
+                                                    "notes": list(e.get("notes") or ())}
+            elif kind == "position":
+                self.position = {k: e.get(k, v) for k, v in _NO_SONG.items()}
+
     def id(self, letter):
         self.ids += 1
         return "%s%s%d" % (self.prefix, letter, self.ids)
@@ -848,6 +1016,9 @@ class _Sound:
 
 
 _HELD = 0.95         # how much of its length a note in a line sounds for
+# What is read back before the page has said anything: no wave, no level, no notes; and no song.
+_NO_READING = {"samples": [], "level": [0, 0], "notes": []}
+_NO_SONG = {"state": "none", "order": 0, "pattern": 0, "row": 0, "tick": 0, "speed": 0, "tempo": 0, "rounds": 0, "rows": 0, "orders": 0}
 
 
 def _steps_of(tune, step, beat, hold, volume, said):
@@ -1000,6 +1171,66 @@ class Song:
         """Go to a place in the song: a part of it (its order list, from 0), then a row of the pattern there."""
         return self._do("seek", order=int(_amount(order, "seek: the order", 0, 65535)), row=int(_amount(row, "seek: the row", 0, 255)))
 
+    def _channel(self, channel, said):
+        if channel is None or channel == "all":
+            return {}
+        if not isinstance(channel, int) or isinstance(channel, bool) or not 0 <= channel <= 31:
+            raise ValueError("%s needs the number of a channel, counting from 0, or nothing for every channel, not %s"
+                             % (said, _shown(channel)))
+        return {"channel": channel}
+
+    def mute(self, channel=None, on=True):
+        """Silence one channel of the song (they count from 0), or with no channel all of them: song.mute(2),
+        and song.mute(2, False) to hear it again."""
+        return self._do("mute", on=bool(on), **self._channel(channel, "mute"))
+
+    def unmute(self, channel=None):
+        return self._do("mute", on=False, **self._channel(channel, "unmute"))
+
+    def solo(self, channel=None, on=True):
+        """Hear only the channels that are soloed: song.solo(2), and song.solo(2, False) or song.solo("all", False)
+        to hear the rest again."""
+        return self._do("solo", on=bool(on), **self._channel(channel, "solo"))
+
+    def loop_pattern(self, on=True):
+        """Stay on the pattern that is playing, round and round, until loop_pattern(False)."""
+        return self._do("loopPattern", on=bool(on))
+
+    def replace(self, song, *, files=None, patches=None):
+        """Put an edited song in the place of this one as it plays: its bytes, its JSON as text, or the song as a
+        dictionary. When the two have the same shape nothing stops, and the change is heard from the next row."""
+        if isinstance(song, (bytes, bytearray)):
+            more = {"bytes": base64.b64encode(bytes(song)).decode("ascii")}
+        elif isinstance(song, str) and song.strip():
+            more = {"text": song}
+        elif isinstance(song, dict):
+            more = {"text": json.dumps(song)}
+        else:
+            raise ValueError("replace needs the new song: its bytes, its JSON as text, or the song itself as a "
+                             "dictionary, not %s" % _shown(song))
+        if files:
+            more["files"] = {name: base64.b64encode(bytes(data)).decode("ascii") if isinstance(data, (bytes, bytearray)) else data
+                             for name, data in files.items()}
+        if patches:
+            more["patches"] = _song_patches(patches)
+        return self._do("replace", **more)
+
+    def channel(self, n):
+        """One channel of the song (the first is 0), for a meter or a scope of its own: song.channel(3).level(),
+        .samples(), .notes(). A frame late in a Pyctures scene, as a synth's are."""
+        if not isinstance(n, int) or isinstance(n, bool) or not 0 <= n <= 31:
+            raise ValueError("channel needs the number of a channel, counting from 0, not %s" % _shown(n))
+        return _Reading(self._sound, "song:channel:%d" % n)
+
+    @property
+    def position(self):
+        """Where the song is, for drawing it: {"state", "order", "pattern", "row", "tick", "speed", "tempo", "rounds",
+        "rows", "orders"}, where state is "playing", "paused", "stopped" or "none". In a Pyctures scene it is what
+        the page said with this frame, so a frame late; the first time it is read it is not known yet ("none")."""
+        s = self._sound
+        s.watch("song:position", None, "position")
+        return dict(s.position)
+
     def __setattr__(self, name, value):
         if name == "volume":
             self._do("volume", vol=_amount(value, "volume", 0, 2))
@@ -1007,6 +1238,22 @@ class Song:
             self._do("repeat", repeat=bool(value))
         else:
             object.__setattr__(self, name, value)
+
+
+class _Reading:
+    """What one source of sound is doing, read back: samples(), level() and notes(), as a synth has them."""
+
+    def __init__(self, sound, id):
+        self._sound, self._id = sound, id
+
+    def samples(self):
+        return self._sound.reading(self._id)["samples"]
+
+    def level(self):
+        return self._sound.reading(self._id)["level"]
+
+    def notes(self):
+        return self._sound.reading(self._id)["notes"]
 
 
 # What a setting is measured in, as a dial shows it (a dial in Hz turns evenly by pitch).
@@ -1026,6 +1273,16 @@ class Synth:
         put(self, "_sample", None)
         put(self, "_page", None)
         put(self, "_macro", None)
+        put(self, "_worn", None)         # a voice changer, once one has been put on: {"voice", "under"}
+        put(self, "_plain", None)        # what the voice settings were before sound_like() first changed them
+        put(self, "_loop", False)
+
+    # What is this object's own and not a setting of the engine.
+    _OWN = ("voice", "loop")
+
+    def _name(self, name):
+        """A setting's name as this synth says it -> the name it has everywhere. (The microphone has words of its own.)"""
+        return name
 
     # --- settings as attributes
     def __getattr__(self, name):
@@ -1033,7 +1290,7 @@ class Synth:
             raise AttributeError(name)
         if name == "macro":
             return self._macro
-        entry = _setting(name)
+        entry = _setting(self._name(name))
         if entry is None:
             raise AttributeError("A synth has no setting called %s.%s" % (_shown(name), _meant(name, _SHOWN)))
         value = self._patch.get(entry["id"], entry["default"])
@@ -1046,11 +1303,11 @@ class Synth:
         return int(value) if entry["kind"] == "int" and value == int(value) else value
 
     def __setattr__(self, name, value):
-        if name.startswith("_"):
+        if name.startswith("_") or name in self._OWN:
             object.__setattr__(self, name, value)
         elif name == "macro":
             self.set_macro(value)
-        elif _setting(name) is not None:
+        elif _setting(self._name(name)) is not None:
             self.set({name: value})
         else:
             # A name that is nearly a setting is a slip, and says so; any other name is the program's own to use.
@@ -1210,9 +1467,10 @@ class Synth:
         return self
 
     # --- settings
-    def set(self, settings=None, value=None, *, slide=None, after=None, at=None, beat=None, **more):
-        """Change several settings at once: lead.set(cutoff=800, resonance=0.4). slide=2 slides there over two seconds.
-        lead.set("cutoff", 800) and lead.set({"cutoff": 800}) are the same thing written other ways."""
+    def set(self, settings=None, value=None, *, glide=None, slide=None, after=None, at=None, beat=None, **more):
+        """Change several settings at once: lead.set(cutoff=800, resonance=0.4). glide=2 slides there over two seconds
+        (slide=2 is the same, an older word for it). lead.set("cutoff", 800) and lead.set({"cutoff": 800}) are the
+        same thing written other ways."""
         if isinstance(settings, str):
             given = {settings: value}
         elif isinstance(settings, dict):
@@ -1224,21 +1482,103 @@ class Synth:
         given.update(more)
         if not given:
             raise ValueError("set needs settings, as in set(cutoff=800)")
-        _patch_of(given, "set", True, self._patch)
         s = self._sound
-        c = {"op": "set", "id": self._id, "set": _sendable(given), "t": s.when("set", after, at, beat)}
-        if slide is not None:
-            c["glide"] = _amount(slide, "set: slide", 0, 60)
+        t = s.when("set", after, at, beat)
+        given = self._given(given, t)
+        if not given:
+            return self
+        _patch_of(given, "set", True, self._patch)
+        c = {"op": "set", "id": self._id, "set": _sendable(given), "t": t}
+        if glide is None:
+            glide = slide
+        if glide is not None:
+            c["glide"] = _amount(glide, "set: glide", 0, 60)
         s.command(c)
         return self
 
+    def _given(self, given, at):
+        """What set() was given, ready to send: a voice is put on, and the rest go by the names they have everywhere."""
+        out = {}
+        for name, value in given.items():
+            if _key(name) == "voice":
+                self._wear(value, at)
+            else:
+                out[self._name(name)] = value
+        return out
+
     def get(self, name):
         """A setting by its name: lead.get("cutoff") is lead.cutoff."""
-        return getattr(self, name)
+        return getattr(self, _snake(name) if _key(name) in ("voice", "loop", "listening") else name)
+
+    # --- a voice changer
+    @property
+    def voice(self):
+        """A voice changer on everything this synth plays: lead.voice = "robot". The voices are robot, chipmunk,
+        monster, cave, telephone, alien and whisper (voice_names()), and "none" takes it off. Each is a handful of
+        settings (the pitch shifter, the ring modulator, the comb, the filter, the echo), which can be turned
+        further once the voice is on. Choosing another voice first puts back what the last one changed."""
+        return self._worn["voice"] if self._worn else "none"
+
+    @voice.setter
+    def voice(self, name):
+        self._wear(name, self._sound.clock())
+
+    def _wear(self, name, at=None, send=True):
+        voice = _voice_name(name) if isinstance(name, str) or name is None or name is False else None
+        if voice is None:
+            names = list(_VOICES["rows"])
+            raise ValueError('%s is not a voice.%s The voices are: %s, and "none"' % (_shown(name), _meant(name, names), ", ".join(names)))
+        if self._worn is None:
+            object.__setattr__(self, "_worn", {"voice": "none", "under": None})
+        _wear_voice(self._worn, self._patch, voice)
+        if send:
+            self._sound.command({"op": "set", "id": self._id, "voice": voice, "t": self._sound.clock() if at is None else at})
+
+    def sound_like(self, other):
+        """Give this the voice and the voice effects of another: take.sound_like(mic) makes a recording sound as the
+        microphone does now, whatever voice has been chosen and however its dials have been turned since."""
+        if not isinstance(other, Synth):
+            raise ValueError("sound_like needs the microphone or a synth to sound like, as in take.sound_like(mic), not %s" % _shown(other))
+        _dress_like(self, other)
+        return self
+
+    def record(self, length=None, **how):
+        """Record what this synth plays into a sample: take = lead.record(4). On the microphone, it records the
+        microphone. See record_sound."""
+        return _record_from(self._sound, dict(how, length=length, source=self), "record")
+
+    @property
+    def loop(self):
+        """A sample or a recording that goes round and round while its note is held: drum.loop = True, or
+        [first frame, the frame after the last]."""
+        return self._loop
+
+    @loop.setter
+    def loop(self, on):
+        object.__setattr__(self, "_loop", list(on) if isinstance(on, (list, tuple)) else bool(on))
+        if self._sample:
+            self._sound.command({"op": "sample", "id": self._sample, "loop": self._loop, "t": self._sound.clock()})
+
+    # --- what it is doing now, for a program that draws it
+    def samples(self):
+        """The wave this synth is making, a list of numbers from -1 to 1: draw it for a scope. In a Pyctures scene
+        it is what the page said with this frame, so a frame late, and empty until the page has first said."""
+        return self._sound.reading(self._id)["samples"]
+
+    def level(self):
+        """How loud this synth is, [left, right], each from 0 to 1: a meter shows it. A frame late, as samples() is."""
+        return self._sound.reading(self._id)["level"]
+
+    def notes(self):
+        """The notes this synth is sounding, as numbers: a keyboard lights them. A frame late, as samples() is."""
+        return self._sound.reading(self._id)["notes"]
 
     def describe(self, name):
         """What a setting can be: {"min", "max", "default", "kind", "choices", "unit"}. A dial asks this."""
-        entry = _setting(name)
+        if _key(name) == "voice":
+            return {"name": "voice", "kind": "choice", "min": 0, "max": len(_VOICES["rows"]), "default": "none",
+                    "choices": ["none"] + list(_VOICES["rows"])}
+        entry = _setting(self._name(name))
         if entry is None:
             return None
         d = {"name": _snake(name), "kind": entry["kind"], "min": entry["min"] / entry["scale"],
@@ -1256,7 +1596,11 @@ class Synth:
     def _told(self, name, value):
         """A control in the page changed a setting by hand: remember it, so lead.cutoff reads what the dial says."""
         try:
-            _patch_of({name: value}, "set", False, self._patch)
+            if _key(name) == "voice":
+                choices = ["none"] + list(_VOICES["rows"])
+                self._wear(choices[int(value)] if _is_number(value) and 0 <= value < len(choices) else value, send=False)
+            else:
+                _patch_of({self._name(name): value}, "set", False, self._patch)
         except (ValueError, TypeError):
             pass
 
@@ -1543,6 +1887,18 @@ class _Output:
             set_effects({name: value})
         self._values[_key(name)] = value
 
+    def samples(self):
+        """The wave of everything that is sounding, numbers from -1 to 1. A frame late in a Pyctures scene."""
+        return self._sound.reading(None)["samples"]
+
+    def level(self):
+        """How loud everything is, [left, right], each from 0 to 1."""
+        return self._sound.reading(None)["level"]
+
+    def notes(self):
+        """The notes that are sounding, as numbers."""
+        return self._sound.reading(None)["notes"]
+
     @property
     def page(self):
         """The page's own object for all the sound, in a Pyctures scene."""
@@ -1754,6 +2110,465 @@ def setting_names():
 #     (lead.learn("cutoff")), without Python in between: so it feels immediate however slow or far away Python is.
 #   - What was received is handed to Python as plain data with the next frame, each message with the time it
 #     happened (on the clock that sound_time() reads), and the program's functions are called then.
+
+# ---------------------------------------------------------------- the microphone, recording and saving
+#
+# The microphone is where the player is, so the page opens it, when the first `mic` command arrives and not
+# before; that is when the browser asks the person. From then on it is a synth by its id whose sound comes in
+# instead of being made, so `set` and a voice work on it. It is all commands (mic, record, save: synths.js's
+# docs/commands.md), and what the player says back (the microphone is on or is not, a recording is over, a file
+# is saved) arrives as plain data: with the next frame in a Pyctures scene, or from a host through
+# receive_sound_events(events). So `mic.state`, `take.done` and `take.seconds` are A FRAME LATE at the soonest,
+# and nothing here ever waits for them.
+
+class _Until:
+    """Something to `await` in a scene that can wait: it looks again every frame, and never holds the program."""
+
+    def __init__(self, over, value):
+        self.over, self.value = over, value
+
+    def __await__(self):
+        while not self.over():
+            p = sys.modules.get("pyctures")
+            frame = getattr(p, "frame", None) if getattr(getattr(p, "S", None), "ns", None) is not None else None
+            if frame is not None:
+                yield from frame().__await__()
+            else:
+                yield
+        return self.value()
+
+
+def _dress_like(synth, other):
+    """One synth is given the voice and the voice effects of another, as ordinary commands: what the other had
+    before any voice, its voice, and what was turned after that (synths.js's dressLike). So a recording of the
+    plain microphone plays back as the microphone sounds, and "none" still puts back the plain voice."""
+    part = [pid for pid in _VOICES["all"] if pid < 200]
+    now = lambda pid: synth._patch.get(pid, _DEFAULTS.get(pid))
+    if synth.voice != "none":
+        synth.voice = "none"
+    if synth._plain is None:
+        object.__setattr__(synth, "_plain", {pid: now(pid) for pid in part})
+
+    def send(pairs):
+        changed = {_BY_ID[pid]: value for pid, value in pairs if value != now(pid)}
+        if changed:
+            Synth.set(synth, changed)
+    under = other._worn["under"] if other._worn else None
+    if under is not None:
+        send([(pid, under[pid] if pid in under else synth._plain[pid]) for pid in part])
+        synth.voice = other._worn["voice"]
+        send([(pid, other._patch[pid]) for pid in part if pid in other._patch])
+    else:
+        send([(pid, other._patch[pid] if pid in other._patch else synth._plain[pid]) for pid in part])
+
+
+class Mic(Synth):
+    """The microphone: what use_microphone() gives. It is a synth whose sound comes in instead of being made, so it
+    has a synth's settings (mic.echo = 0.4, mic.cutoff = 900), the voice changers (mic.voice = "robot") and what a
+    dial, a scope and a meter look for. Its own words: `pitch` is the pitch shifter (-12 to 12 semitones), `ring`
+    the ring modulator, `gain` how much the microphone is turned up, and `gate` the level in dB below which it is
+    taken as silence ("off" for none). Nothing is heard until listen().
+
+    mic.state is "asking" until the page has said, then "on", or why not: "refused", "none", "busy" or
+    "unavailable"; "off" once closed. It is told with a frame, so it is a frame late at the soonest."""
+
+    _OWN = Synth._OWN + ("listening", "state", "message")
+
+    def __init__(self, sound, id):
+        Synth.__init__(self, sound, id, {}, 60, 0.3)
+        put = object.__setattr__
+        put(self, "_listening", False)
+        put(self, "_waiting", [])
+        put(self, "state", "asking")
+        put(self, "message", "")
+
+    def __repr__(self):
+        return "<the microphone: %s>" % self.state
+
+    def _name(self, name):
+        return _MIC_NAMES.get(_key(name), name) if isinstance(name, str) else name
+
+    def _given(self, given, at):
+        out = {}
+        for name, value in given.items():
+            k = _key(name)
+            if k == "listening":
+                self.listening = value
+            elif k == "gate" and (value is False or value is None or value == "off"):
+                out["micGate"] = -100
+            else:
+                out[name] = value
+        # The microphone starts with no filter, so that it comes through untouched. Turning the cutoff asks for one.
+        names = [(_setting(self._name(n)) or {}).get("name") for n in out]
+        if ("filter.cutoff" in names or "filter.resonance" in names) and "filter.type" not in names and self.filter == "off":
+            out["filter"] = "lowpass"
+        return Synth._given(self, out, at)
+
+    def describe(self, name):
+        if _key(name) == "listening":
+            return {"name": "listening", "kind": "bool", "min": 0, "max": 1, "default": False}
+        return Synth.describe(self, name)
+
+    def _told(self, name, value):
+        if _key(name) == "listening":
+            object.__setattr__(self, "_listening", bool(value))
+        else:
+            Synth._told(self, name, value)
+
+    def listen(self, on=True):
+        """Hear the microphone, through its voice and effects. With loudspeakers this can howl: headphones are best."""
+        object.__setattr__(self, "_listening", bool(on))
+        self._sound.command({"op": "mic", "id": self._id, "listen": self._listening, "t": self._sound.clock()})
+        return self
+
+    def mute(self):
+        """Stop hearing it. It can still be recorded, and a scope and a meter still show it."""
+        return self.listen(False)
+
+    @property
+    def listening(self):
+        return self._listening
+
+    @listening.setter
+    def listening(self, on):
+        self.listen(on is True or on == 1 or on == "on")
+
+    @property
+    def ready(self):
+        """Whether there is a microphone: None while the person is still being asked, then True or False."""
+        return None if self.state == "asking" else self.state == "on"
+
+    def on_ready(self, fn):
+        """Call a function when it is known whether there is a microphone: mic.on_ready(lambda there: ...)."""
+        if not callable(fn):
+            raise ValueError("on_ready needs a function to call, as in mic.on_ready(started), not %s" % _shown(fn))
+        if self.state == "asking":
+            self._waiting.append(fn)
+        else:
+            _call(fn, self.state == "on")
+        return self
+
+    def when_ready(self):
+        """For a scene that can wait: `there = await mic.when_ready()` is True once the microphone is on, False
+        if there is none. It looks again each frame and holds nothing up."""
+        return _Until(lambda: self.state != "asking", lambda: self.state == "on")
+
+    def _said(self, e):
+        if self.state == "off":
+            return
+        put = object.__setattr__
+        put(self, "state", e.get("state") or "unavailable")
+        put(self, "message", e.get("message") or "")
+        if self.state != "asking":
+            waiting, self._waiting[:] = list(self._waiting), []
+            for fn in waiting:
+                _call(fn, self.state == "on")
+
+    def close(self):
+        """Let the microphone go: the browser's recording light goes out. use_microphone() opens it again."""
+        if self.state == "off":
+            return self
+        put = object.__setattr__
+        put(self, "state", "off")
+        put(self, "_listening", False)
+        waiting, self._waiting[:] = list(self._waiting), []
+        for fn in waiting:
+            _call(fn, False)
+        s = self._sound
+        s.command({"op": "mic", "id": self._id, "do": "close", "t": s.clock()})
+        if s.mic is self:
+            s.mic = None
+        return self
+
+    def remove(self):
+        return self.close()
+
+
+def use_microphone(voice=None, *, listen=None, raw=None, **settings):
+    """The microphone: mic = use_microphone(). The first call has the page ask for it, and the browser asks the
+    person; until then, and if the answer is no, everything still works and there is simply no sound from it.
+    use_microphone("robot", listen=True) sets it up in one line; raw=False asks for the browser's own tidying
+    (echo cancelling, noise removal, automatic level), which suits loudspeakers and spoils a voice changer.
+
+    It is a synth: mic.voice = "robot", mic.pitch = 7, mic.echo = 0.4, mic.gain = 2, mic.gate = -40. Nothing is
+    heard until mic.listen(); wear headphones when you do. Recording does not need it."""
+    if isinstance(voice, dict):
+        settings = dict(voice, **settings)
+        voice = settings.pop("voice", None)
+        listen = settings.pop("listen", listen)
+        raw = settings.pop("raw", raw)
+    elif voice is not None and not isinstance(voice, str):
+        raise ValueError('use_microphone takes a voice and settings, as in use_microphone("robot", echo=0.4), not %s' % _shown(voice))
+    s = _sound()
+    if s.mic is None:
+        mic = Mic(s, s.id("m"))
+        gate = _NAMES.get("microphone", {}).get("gate", -50)
+        _patch_of({"micGate": gate}, "use_microphone", False, mic._patch)
+        c = {"op": "mic", "id": mic._id, "set": {"micGate": gate}, "t": s.clock()}
+        if raw is False:
+            c["raw"] = False
+        s.hear_back()
+        s.command(c)
+        s.mic = mic
+        if isinstance(s.transport, _Nowhere):
+            mic._said({"state": "unavailable"})
+    mic = s.mic
+    if voice is not None:
+        settings["voice"] = voice
+    if settings:
+        mic.set(settings)
+    if listen is not None:
+        mic.listen(bool(listen))
+    return mic
+
+
+def stop_microphone():
+    """Let the microphone go, if it was asked for."""
+    s = _sound()
+    if s.mic is not None:
+        s.mic.close()
+
+
+class Take(Synth):
+    """A recording, while it is being made and afterwards: what record_sound() gives back at once. It is a sample
+    like one from load_sample, so take.play(), take.play("E4"), take.reverse = True and take.loop = True all work,
+    and they work while it is still recording (it plays what there is so far).
+
+    take.done turns True and take.seconds says how long it is when it is over. In a Pyctures scene the page says
+    so with a frame, so both change the frame AFTER the recording ended. take.on_done(fn) calls a function then,
+    and `await take.when_done()` waits in a scene that can wait."""
+
+    _OWN = Synth._OWN + ("done", "recording", "seconds", "frames")
+
+    def __init__(self, sound, id, patch, sample):
+        Synth.__init__(self, sound, id, patch, 60, None)
+        put = object.__setattr__
+        put(self, "_sample", sample)
+        put(self, "_after", [])
+        put(self, "done", False)
+        put(self, "recording", True)
+        put(self, "seconds", 0)
+        put(self, "frames", 0)
+
+    def __repr__(self):
+        return "<a recording, %s>" % ("%.2f seconds" % self.seconds if self.done else "still being made")
+
+    def on_done(self, fn):
+        """Call a function when the recording is over: take.on_done(lambda: take.play()). It is given the take, if
+        it takes anything. One that is already over is called at once."""
+        if not callable(fn):
+            raise ValueError("on_done needs a function to call when the recording is over, as in "
+                             "take.on_done(lambda: take.play()), not %s" % _shown(fn))
+        if self.done:
+            _call(fn, self)
+        else:
+            self._after.append(fn)
+        return self
+
+    def when_done(self):
+        """For a scene that can wait: `await take.when_done()` carries on when the recording is over. It looks
+        again each frame and holds nothing up."""
+        return _Until(lambda: self.done, lambda: self)
+
+    def stop_recording(self):
+        """End this recording now."""
+        if not self.done:
+            self._sound.command({"op": "record", "do": "stop", "id": self._sample, "t": self._sound.clock()})
+        return self
+
+    def _finish(self, e):
+        if self.done:
+            return
+        put = object.__setattr__
+        put(self, "done", True)
+        put(self, "recording", False)
+        put(self, "seconds", e.get("seconds") or 0)
+        put(self, "frames", e.get("frames") or 0)
+        after, self._after[:] = list(self._after), []
+        for fn in after:
+            _call(fn, self)
+
+
+def _record_from(s, o, said):
+    """What record_sound, record_output, start_recording and a synth's record() all do."""
+    names = _NAMES.get("microphone", {})
+    longest = names.get("longestRecording", 120)
+    source = o.pop("from", None) if o.get("source") is None else o.get("source")
+    wid = s.id("w")
+    c = {"op": "record", "id": wid}
+    mic = None
+    if source is None or source in ("mic", "microphone") or isinstance(source, Mic):
+        c["from"] = "mic"
+        mic = use_microphone()
+    elif source == "output" or isinstance(source, _Output):
+        c["from"] = "output"
+    elif isinstance(source, Synth):
+        c["from"], c["synth"] = "synth", source._id
+    else:
+        raise ValueError('%s: source needs the microphone, a synth or "output", not %s' % (said, _shown(source)))
+    if o.get("length") is not None:
+        c["len"] = s.length(o["length"], "%s: the length" % said)
+        if c["len"] > longest:
+            raise ValueError("%s: a recording can be up to %d seconds long, not %d" % (said, longest, round(c["len"])))
+    elif o.get("max") is not None:
+        c["max"] = _amount(o["max"], "%s: max" % said, 0.1, longest)
+    if o.get("effects"):
+        c["effects"] = True
+    loop = o.get("loop")
+    if loop:
+        c["loop"] = list(loop) if isinstance(loop, (list, tuple)) else True
+    c["t"] = s.when(said, o.get("after"), o.get("at"), o.get("beat"))
+    sid = s.id("s")
+    s.hear_back()
+    s.command(c)
+    s.command({"op": "synth", "id": sid, "preset": "sample", "set": {"sample": wid}, "t": s.clock()})
+    patch = _patch_of(_NAMES["plain"], said, False)
+    _patch_of(_NAMES["synths"].get("sample"), said, False, patch)
+    take = Take(s, sid, patch, wid)
+    if loop:
+        object.__setattr__(take, "_loop", c["loop"])
+    s.takes[wid] = take
+    if mic is not None and not c.get("effects"):
+        _dress_like(take, mic)
+    if isinstance(s.transport, _Nowhere):
+        s.takes.pop(wid, None)
+        take._finish({})       # no player: it is over at once, and empty
+    return take
+
+
+def record_sound(length=None, *, effects=False, source=None, max=None, loop=None, after=None, at=None, beat=None, **more):
+    """Record the microphone into a sample: take = record_sound(3) is three seconds (a note length by name works
+    too). It gives the sample back at once and does not wait: your program carries on and the take fills up behind
+    it (see Take: take.done, take.seconds, take.on_done(fn), take.play("E4")).
+
+    What is recorded is the plain voice, whether or not the microphone is being listened to, and the take is
+    given the microphone's voice and effects, so it plays back as the microphone sounds and can be changed
+    afterwards (take.voice = "monster"). effects=True records the voice after its effects instead, which needs
+    listen(). source=lead records a synth, source="output" everything. With no microphone the take is empty,
+    and done as soon as the page says so."""
+    return _record_from(_sound(), dict(more, length=length, effects=effects, source=source, max=max, loop=loop,
+                                       after=after, at=at, beat=beat), "record_sound")
+
+
+def start_recording(*, max=None, effects=False, source=None, loop=None, after=None, at=None, beat=None, **more):
+    """A recording with no set length: it runs until stop_recording(), or for 30 seconds, or max=seconds up to 120."""
+    return _record_from(_sound(), dict(more, length=None, effects=effects, source=source, max=max, loop=loop,
+                                       after=after, at=at, beat=beat), "start_recording")
+
+
+def stop_recording():
+    """End the recording that is being made."""
+    s = _sound()
+    s.command({"op": "record", "do": "stop", "t": s.clock()})
+
+
+def record_output(length=None, *, max=None, loop=None, after=None, at=None, beat=None):
+    """Record everything that is played, in stereo, for "save my tune": tune = record_output(10), then
+    save_sound(tune, "tune.wav")."""
+    return _record_from(_sound(), dict(length=length, source="output", max=max, loop=loop, after=after, at=at, beat=beat),
+                        "record_output")
+
+
+class Saved:
+    """What save_sound() gives back: saved.done turns True when the file has been made (a frame late in a Pyctures
+    scene), saved.name is the file's name, saved.path where Python wrote it (None when the page kept or
+    downloaded it), saved.bytes the WAV file itself when Python was given it, and saved.seconds how long it is.
+    saved.on_done(fn) calls a function then, and `await saved.when_done()` waits in a scene that can wait."""
+
+    def __init__(self, name, write):
+        self.name, self.path, self.bytes, self.seconds, self.done = name, None, None, 0, False
+        self._write, self._after = write, []
+
+    def __repr__(self):
+        return "<%s, %s>" % (self.name, "saved" if self.done else "being saved")
+
+    def on_done(self, fn):
+        if not callable(fn):
+            raise ValueError("on_done needs a function to call when the file is saved, not %s" % _shown(fn))
+        if self.done:
+            _call(fn, self)
+        else:
+            self._after.append(fn)
+        return self
+
+    def when_done(self):
+        return _Until(lambda: self.done, lambda: self)
+
+    def _finish(self, e):
+        if self.done:
+            return
+        data = e.get("bytes")
+        if isinstance(data, str):
+            try:
+                data = base64.b64decode(data)
+            except ValueError:
+                data = None
+        elif isinstance(data, (list, tuple)):
+            data = bytes(bytearray(data))
+        self.bytes = bytes(data) if isinstance(data, (bytes, bytearray)) else None
+        self.seconds = e.get("seconds") or 0
+        if self._write and self.bytes is not None:
+            try:
+                folder = os.path.dirname(self.name)
+                if folder:
+                    os.makedirs(folder, exist_ok=True)
+                with open(self.name, "wb") as f:
+                    f.write(self.bytes)
+                self.path = os.path.abspath(self.name)
+            except OSError as err:
+                _tell("save_sound(%s): the file could not be written (%s)." % (_shown(self.name), getattr(err, "strerror", None) or err))
+        self.done = True
+        after, self._after[:] = list(self._after), []
+        for fn in after:
+            _call(fn, self)
+
+
+def save_sound(what=None, name=None, *, download=None):
+    """A recording or a sample as a WAV file: save_sound(take, "hello.wav"). A recording that is still being made
+    is saved when it is over.
+
+    WHERE IT GOES. Run by your own Python (`pyctures run`), the file is written beside your program, a frame or two
+    after the recording is over (the page hands Python the file). In a web page it is downloaded, or kept by the
+    app that shows the page. download=False saves nothing anywhere and hands Python the bytes: saved.bytes.
+    It gives back a Saved at once (saved.done, saved.on_done(fn)) and never waits."""
+    if not isinstance(what, Synth) or not what._sample:
+        raise ValueError('save_sound needs a recording or a sample to save, as in save_sound(take, "hello.wav")')
+    if name is not None and (not isinstance(name, str) or not name.strip()):
+        raise ValueError('save_sound needs a name for the file, as in save_sound(take, "hello.wav"), not %s' % _shown(name))
+    name = "sound.wav" if name is None else name.strip()
+    if not name.lower().endswith(".wav"):
+        name += ".wav"
+    # A path from the program's folder, and never out of it.
+    name = "/".join(p for p in name.replace("\\", "/").split("/") if p not in ("", ".", "..") and not p.endswith(":")) or "sound.wav"
+    s = _sound()
+    s.asks += 1
+    c = {"op": "save", "id": what._sample, "name": name, "ask": s.asks, "t": s.clock()}
+    write = download is not False and s.transport.keeps_files()
+    if write or download is False:
+        c["download"] = False      # Python is given the bytes, and writes the file itself or keeps them
+    saved = Saved(name, write)
+    s.saves[s.asks] = saved
+    s.hear_back()
+    s.command(c)
+    if isinstance(s.transport, _Nowhere):
+        s.saves.pop(s.asks, None)
+        saved._finish({})
+    return saved
+
+
+def receive_sound_events(events):
+    """Hand the program what a player said back, just as the page would: a dict or a list of them, as synths.js's
+    player.onSoundEvents gives them. {"type": "microphone", "state": "on"}, {"type": "recorded", "id", "frames",
+    "seconds"}, {"type": "saved", "id", "ask", "name", "seconds", "bytes"} (bytes, or base64 text). Two more are
+    understood, for a program that draws its sound: {"type": "reading", "id", "samples", "level", "notes"} (no
+    id: all the sound) and {"type": "position", ...a song's place}."""
+    _sound().receive(events)
+
+
+def voice_names():
+    """The voice changers a microphone, a recording or a synth can be given: mic.voice = "robot"."""
+    return list(_VOICES["rows"])
+
 
 _MIDI_HOOKS = ("on_midi", "on_midi_note", "on_midi_note_off", "on_midi_control", "on_midi_devices")
 
