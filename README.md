@@ -268,6 +268,7 @@ Every setting is a plain attribute, and reads back what you set: `lead.cutoff = 
 | `sub`, `noise` | a wave an octave below, and hiss (each 0 to 1) |
 | `vibrato`, `vibrato_rate`, `vibrato_delay` | a wobble of pitch: how far (semitones), how fast, how long before it begins |
 | `tremolo`, `wobble`, `wobble_rate` | a wobble of loudness, and of the filter |
+| `pwm`, `pwm_rate` | the pulse wave's width moving in and out (0 to 1: how far) and how fast, in Hz: the thick, shifting sound of a `"pulse"` or `"square"` wave. `pwm_rate` and `wobble_rate` are one speed under two names |
 | `pitch_sweep`, `pitch_sweep_decay` | each note begins that many semitones off and falls into place: a drum's thump, a laser |
 | `echo`, `reverb`, `chorus` | how much of the synth goes to each effect (0 to 1) |
 | `distortion`, `crush` | grit (0 to 1), and the bits each sample keeps (16 is clean, 4 is an old games console) |

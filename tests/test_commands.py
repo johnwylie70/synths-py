@@ -245,6 +245,16 @@ def test_settings_read_back_what_was_set(sent):
     assert lead.cutoff == 432 and sent[-1]["op"] == "set" and sent[-1]["set"] != {"cutoff": 432}
 
 
+def test_pwm_is_the_pulse_width_moving_on_the_slow_wobbler(sent):
+    """As synths.js has it: pwm is how far, and pwm_rate is wobble_rate under another name."""
+    lead = make_synth("lead", wave="pulse", pwm=0.6)
+    assert lead.pwm == 0.6 and sent[-1]["set"]["pwm"] == 0.6
+    lead.pwm_rate = 0.5
+    assert sent[-1]["set"] == {"pwm_rate": 0.5} and lead.pwm_rate == 0.5 and lead.wobble_rate == 0.5
+    assert lead.describe("pwm")["max"] == 1 and lead.describe("pwm")["default"] == 0
+    assert "pwm" in setting_names() and "pwm_rate" in setting_names()
+
+
 def test_chords_and_arpeggios(sent):
     assert chord_notes("Cm7") == [60, 63, 67, 70] and chord_notes("C3", "minor") == [48, 51, 55]
     assert chord_notes("F#") == [66, 70, 73] and chord_notes("C", "M7") == [60, 64, 67, 71]
