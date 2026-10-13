@@ -1,0 +1,48 @@
+// One program, as synths.js writes it: the commands, for tests/test_voice.py to set beside what Python writes.
+import { pathToFileURL } from 'node:url'
+const { createSound } = await import(pathToFileURL(process.argv[2]).href)
+const batches = []
+const s = createSound({ sound: { send: (b) => batches.push(b) }, clock: () => 0, batch: 'manual' })
+const mic = s.useMicrophone()
+mic.voice = 'robot'
+mic.listen()
+mic.pitch = 7
+mic.gain = 2
+mic.gate = -40
+mic.set({ gate: 'off' })
+mic.cutoff = 900
+mic.voice = 'cave'
+mic.echo = 0.4
+const take = s.recordSound(3)
+take.voice = 'monster'
+take.reverse = true
+take.loop = true
+take.play('E4')
+take.soundLike(mic)
+mic.mute()
+const open = s.startRecording({ max: 60 })
+s.stopRecording()
+open.stopRecording()
+const lead = s.makeSynth('lead')
+lead.voice = 'alien'
+lead.pitchShift = 12
+lead.ringMod = 0.6
+lead.set({ comb: 0.5, voice: 'none' }, { glide: 2 })
+const part = lead.record(4)
+const tune = s.recordOutput(10)
+s.saveSound(part, 'part')
+s.saveSound(part, { download: false })
+const song = s.playSong('tune.mod')
+song.mute(2)
+song.mute(2, false)
+song.unmute()
+song.solo(0)
+song.solo('all', false)
+song.loopPattern()
+song.loop_pattern(false)
+song.replace({ title: 'x' })
+song.replace('{"title":"y"}')
+s.stopMicrophone()
+await new Promise((yes) => setTimeout(yes, 0))
+s.flush()
+process.stdout.write(JSON.stringify(batches.flatMap((b) => b.cmds)))
