@@ -24,6 +24,7 @@ FORMAT = {
     "stop": {"id": str},
     "master": {"volume": NUMBER, "mute": bool, "set": dict},
     "free": {"id": str},
+    "buffer": {"size": (int, str)},
     "song": {"id": str, "do": str, "url": str, "bytes": str, "name": str, "repeat": bool, "vol": NUMBER, "raw": bool,
              "patches": dict, "files": dict, "order": int, "row": int},
 }
@@ -58,6 +59,7 @@ def test_everything_the_library_writes_is_in_the_format(sent, tmp_path):
     wav.write_bytes(b"RIFF....WAVE")
     play_sound("laser")
     play_sound("coin", 0.5, pitch=3, pan=-1, after=0.5)
+    set_sound_buffer("large")
     play_sound("win", length="half", after="quarter")
     note("C4", "quarter")
     chord("Cm", "half")
@@ -253,6 +255,27 @@ def test_pwm_is_the_pulse_width_moving_on_the_slow_wobbler(sent):
     assert sent[-1]["set"] == {"pwm_rate": 0.5} and lead.pwm_rate == 0.5 and lead.wobble_rate == 0.5
     assert lead.describe("pwm")["max"] == 1 and lead.describe("pwm")["default"] == 0
     assert "pwm" in setting_names() and "pwm_rate" in setting_names()
+
+
+def test_the_sound_buffer_is_set_by_a_word_or_frames_and_read_back(sent, capsys):
+    """As synths.js has it: a buffer command, answered by an event that sound_buffer() then gives."""
+    assert sound_buffer() == {"frames": 0, "delay": 0, "thread": None, "underruns": 0, "setting": "auto"}
+    assert [c for c in sent if c["op"] == "buffer"] == [{"op": "buffer", "t": sent[-1]["t"]}]      # it asked, once
+    sound_buffer()
+    assert len([c for c in sent if c["op"] == "buffer"]) == 1
+    assert set_sound_buffer("large")["setting"] == 4096 and sent[-1]["size"] == 4096
+    for asked, size in (("small", 1024), ("Medium", 2048), ("auto", "auto"), (None, "auto"), (8192, 8192), ("512", 512), (100, 256), (99999, 16384)):
+        set_sound_buffer(asked)
+        assert sent[-1]["op"] == "buffer" and sent[-1]["size"] == size, asked
+    set_sound_buffer(3000)
+    assert sent[-1]["size"] == 4096 and "3000 is taken as 4096" in capsys.readouterr().err
+    for wrong in ("huge", -1, 0, [4096]):
+        with pytest.raises(ValueError, match="set_sound_buffer needs"):
+            set_sound_buffer(wrong)
+    synths.receive_sound_events({"type": "buffer", "frames": 4096, "delay": 179, "thread": "page", "underruns": 2, "setting": 4096})
+    assert sound_buffer() == {"frames": 4096, "delay": 179, "thread": "page", "underruns": 2, "setting": 4096}
+    for batch in sent.batches:
+        check(batch)
 
 
 def test_chords_and_arpeggios(sent):

@@ -556,6 +556,15 @@ mute_sound()         # silence, and unmute_sound() to bring it back
 stop_sound()         # stop everything that is sounding or waiting to sound
 ```
 
+### If the sound clicks
+
+```python
+set_sound_buffer("large")        # "small" (1024 frames), "medium" (2048), "large" (4096), "auto", or a number of frames
+now = sound_buffer()             # {"frames": 4096, "delay": 179, "thread": "page", "underruns": 0, "setting": 4096}
+```
+
+A page that is not served over https (a development build opened on a phone or an iPad by the computer's address) makes its sound on the page's own thread, a buffer at a time, and clicks when the page is busy for longer than a buffer lasts. A larger buffer rides over that and is heard later: `"large"` is about a fifth of a second from a key to its note, `"small"` a twentieth. `"auto"` lets the page choose, and double it once if it keeps clicking. It may be called before the first sound or at any time. `delay` is the milliseconds from a key to its note, `thread` is `"page"` there and `"audio"` on an https page, where there is nothing to fix and the same call sets how far ahead everything is scheduled instead; `underruns` counts the clicks. What `sound_buffer()` says is what the page last said, a frame late, and all zeros before it has. A number that is not a power of two from 256 to 16384 is taken as the nearest, with one message.
+
 ## Songs
 
 A song is a whole piece of music in one file, played by the sound engine itself: a tracker's `.mod` or `.xm` file, or a song in synths' own format, which is text you can read and change.

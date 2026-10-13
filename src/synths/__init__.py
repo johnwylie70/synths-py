@@ -84,7 +84,7 @@ import time
 __version__ = "0.1.0"
 
 __all__ = ["play_sound", "play_note", "play_notes", "make_synth", "load_sample", "play_song", "stop_song",
-           "stop_sound", "set_volume", "mute_sound", "unmute_sound", "set_effects", "set_tempo", "beats", "beat",
+           "stop_sound", "set_volume", "mute_sound", "unmute_sound", "set_effects", "set_tempo", "beats", "beat", "set_sound_buffer", "sound_buffer",
            "sound_time", "sound_names", "synth_names", "setting_names", "note_number", "chord_notes", "play_arp",
            "start_arp", "main_synth", "sound_output", "note", "chord", "rest", "start_lines", "loop_notes",
            "length_beats",
@@ -280,6 +280,7 @@ _NAMES = json.loads(r'''
  "lengthLetters": {"w": 4, "h": 2, "q": 1, "e": 0.5, "s": 0.25, "t": 0.125},
  "midi": {"types": ["noteOff", "noteOn", "notePressure", "control", "program", "pressure", "bend", "sysex", "timeCode", "songPosition", "songSelect", "tuneRequest", "clock", "start", "continue", "stop", "sensing", "reset", "other", "devices", "tempo", "learned", "set"], "does": ["devices", "listen", "input", "output", "send", "play", "through", "map", "learn", "unmap", "clock", "stop"], "functions": ["onMidi", "onMidiNote", "onMidiNoteOff", "onMidiControl", "onMidiDevices", "useMidiHooks", "sendMidi", "sendMidiNote", "sendMidiNoteOff", "sendMidiControl", "sendMidiBend", "sendMidiProgram", "sendMidiClock", "midiDevices", "useMidiInput", "useMidiOutput", "midiInput", "midiOutput", "receiveMidi", "stopMidi"], "synthFunctions": ["playFromMidi", "sendToMidi", "mapMidi", "learn", "unmapMidi", "midiInput", "midiOutput"], "choices": {"settings": ["device", "channel"], "all": "all", "none": "no devices", "unavailable": "no MIDI here"}},
  "voices": {"robot": {"help": "A machine: the voice multiplied by a 50 Hz wave, ringing in a metal pipe.", "values": {"fx.ring": 1, "fx.ring_freq": 50, "fx.comb": 0.45, "fx.comb_freq": 110, "fx.comb_feedback": 0.8, "fx.bits": 10}}, "chipmunk": {"help": "Small and squeaky: everything seven semitones higher.", "values": {"fx.pitch": 7}}, "monster": {"help": "Huge and deep: seven semitones lower, with a growl and a little room.", "values": {"fx.pitch": -7, "fx.drive": 0.25, "send.reverb": 0.3, "reverb.size": 0.7, "reverb.damping": 0.6}}, "cave": {"help": "Far inside a cave: long echoes and an enormous, dark space.", "values": {"send.delay": 0.5, "send.reverb": 0.6, "delay.time": 0.38, "delay.feedback": 0.55, "delay.tone": 2500, "reverb.type": 3, "reverb.size": 0.4, "reverb.damping": 0.55}}, "telephone": {"help": "Down an old phone line: only the middle of the voice, coarse and a little crushed.", "values": {"filter.type": 3, "filter.slope": 1, "filter.cutoff": 1200, "filter.resonance": 0.2, "fx.drive": 0.2, "fx.bits": 8, "fx.downsample": 6}}, "alien": {"help": "Not from here: higher, multiplied by a 180 Hz wave, with a slow metallic sweep.", "values": {"fx.pitch": 4, "fx.ring": 0.8, "fx.ring_freq": 180, "fx.comb": 0.4, "fx.comb_freq": 600, "fx.comb_feedback": 0.75, "fx.comb_rate": 0.4, "fx.comb_depth": 0.5, "send.chorus": 0.4}}, "whisper": {"help": "Hoarse and breathy: the voice's pitch blurred into noise, with its low end taken off.", "values": {"filter.type": 2, "filter.cutoff": 500, "filter.resonance": 0, "fx.ring": 1, "fx.ring_wave": 1, "fx.ring_freq": 350}}},
+ "buffer": {"functions": ["setSoundBuffer", "soundBuffer"], "words": {"small": 1024, "medium": 2048, "large": 4096, "auto": "auto"}, "least": 256, "most": 16384, "event": "buffer", "reads": ["frames", "delay", "thread", "underruns", "setting"], "threads": ["audio", "page"]},
  "song": {"does": ["play", "resume", "pause", "stop", "seek", "volume", "repeat", "mute", "solo", "loopPattern", "replace"], "functions": ["stop", "pause", "resume", "seek", "mute", "unmute", "solo", "loopPattern", "replace"]},
  "microphone": {"names": {"pitch": "pitchShift", "ring": "ringMod", "gain": "micGain", "gate": "micGate", "gaterelease": "micGateRelease"}, "gate": -50, "states": ["asking", "on", "refused", "none", "busy", "unavailable", "off"], "functions": ["useMicrophone", "stopMicrophone", "recordSound", "startRecording", "stopRecording", "recordOutput", "saveSound", "receiveSoundEvents", "voiceNames"], "micFunctions": ["listen", "mute", "record", "whenReady", "close"], "takeFunctions": ["onDone", "whenDone", "stopRecording"], "events": ["microphone", "recorded", "saved"], "longestRecording": 120, "usualRecording": 30}
 }
@@ -962,6 +963,9 @@ class _Sound:
         self.readings = {}       # synth id ("" for all the sound) -> what it was doing when the page last said
         self.watched = {}        # what the page was asked to watch -> when it was last asked
         self.position = dict(_NO_SONG)
+        self.buffer_set = None   # what set_sound_buffer asked for: "auto" or frames
+        self.buffer_asked = False
+        self.buffer_said = None  # the buffer as the player last said it
         # THE SETTINGS EVERY SYNTH SHARES (the echo's time, the reverb's type): there is one echo and one reverb,
         # so one value of each, whoever set it. Kept here by engine id, and what every synth and sound_output() read.
         self.for_all = {}
@@ -1063,6 +1067,8 @@ class _Sound:
                                                     "notes": list(e.get("notes") or ())}
             elif kind == "position":
                 self.position = {k: e.get(k, v) for k, v in _NO_SONG.items()}
+            elif kind == _NAMES["buffer"]["event"]:
+                self.buffer_said = {k: e.get(k) for k in _NAMES["buffer"]["reads"]}
 
     def id(self, letter):
         self.ids += 1
@@ -2190,6 +2196,62 @@ def beat():
     """Which beat it is now (a fraction between beats)."""
     s = _sound()
     return (s.clock() - s.beat_zero) * s.tempo / 60
+
+
+def _buffer_size(asked):
+    """A sound buffer as it may be asked for, as synths.js reads it: "auto", a word (small, medium, large) or a
+    number of frames, brought to the nearest power of two from 256 to 16384. (size, exact), or None."""
+    b = _NAMES["buffer"]
+    if asked is None:
+        return "auto", True
+    if isinstance(asked, str):
+        word = asked.lower().strip()
+        if word in b["words"]:
+            return b["words"][word], True
+        try:
+            asked = float(word)
+        except ValueError:
+            return None
+    if not _is_number(asked) or not asked > 0 or asked == float("inf"):
+        return None
+    low, high = int(math.log2(b["least"])), int(math.log2(b["most"]))
+    size = 2 ** min(high, max(low, int(math.floor(math.log2(asked) + 0.5))))
+    return size, size == asked
+
+
+def set_sound_buffer(size="auto"):
+    """How much sound is made at a time: set_sound_buffer("large") or set_sound_buffer(4096) for fewer clicks on a
+    slow device, "small" (1024) for a keyboard that feels late, "medium" (2048), and "auto" to let the page choose
+    and change it again. A number is frames: a power of two from 256 to 16384. It matters on a page with no https
+    address, where sound is made on the page's thread; on the audio thread it sets how far ahead everything is
+    scheduled instead. It gives what sound_buffer() does."""
+    got = _buffer_size(size)
+    if got is None:
+        raise ValueError('set_sound_buffer needs "small", "medium", "large", "auto" or a number of frames from 256 to '
+                         '16384, as in set_sound_buffer("large"), not %s' % _shown(size))
+    if not got[1]:
+        _tell("a sound buffer is a power of two from 256 to 16384, so %s is taken as %d." % (_shown(size), got[0]))
+    s = _sound()
+    s.buffer_set = got[0]
+    s.hear_back()
+    s.buffer_asked = True
+    s.command({"op": "buffer", "size": got[0], "t": s.clock()})
+    return sound_buffer()
+
+
+def sound_buffer():
+    """The buffer as the page last said it: {"frames", "delay", "thread", "underruns", "setting"}. `delay` is the
+    milliseconds from a key to its note, `thread` is "audio" (the audio thread: nothing to worry about), "page" (the
+    page's thread, which a busy page makes click) or None before the page has said, `underruns` how many times the
+    sound came too late, and `setting` what was asked for ("auto" or frames). It is a frame late."""
+    s = _sound()
+    if not s.buffer_asked:
+        s.hear_back()
+        s.buffer_asked = True
+        s.command({"op": "buffer", "t": s.clock()})
+    if s.buffer_said:
+        return dict(s.buffer_said)
+    return {"frames": 0, "delay": 0, "thread": None, "underruns": 0, "setting": "auto" if s.buffer_set is None else s.buffer_set}
 
 
 def sound_time():
