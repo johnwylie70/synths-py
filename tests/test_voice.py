@@ -396,3 +396,24 @@ def test_reading_back_what_a_synth_does_and_where_a_song_is(studio):
     assert len(lead.samples()) == 1024 and max(lead.samples()) > 0.05 and lead.notes() == [69] and lead.level()[0] > 0.05
     receive_sound_events({"type": "position", **out["position"]})
     assert play_song(b"x").position["state"] == "none"
+
+
+def test_a_setting_every_synth_shares_has_one_value_whoever_set_it(sent):
+    lead, bass = make_synth("lead"), make_synth("bass")
+    assert lead.reverb_type == "room" and lead.describe("reverb_type")["choices"] == ["room", "hall", "plate", "cathedral", "spring"]
+    lead.reverb_type = "hall"
+    assert bass.reverb_type == "hall" and sound_output().get("reverb_type") == "hall"
+    set_effects(reverb_type="plate", reverb_decay=3, echo_time=0.3)
+    assert lead.reverb_type == bass.reverb_type == "plate" and lead.reverb_decay == 3 and bass.echo_time == 0.3
+    sound_output().set("reverb_predelay", 0.05)
+    assert lead.reverb_predelay == 0.05 and sound_output().get("reverb_predelay") == 0.05
+    pad = make_synth("pad", reverb_low_cut=300)
+    assert lead.reverb_low_cut == 300 and pad.reverb_type == "plate"
+    # A voice may change what every synth shares, and takes it back when it is taken off.
+    size = lead.reverb_size
+    bass.voice = "cave"
+    assert lead.reverb_size == bass.reverb_size != size
+    bass.voice = "none"
+    assert lead.reverb_size == size
+    lead.cutoff = 500
+    assert bass.cutoff != 500, "a synth's own settings stay its own"

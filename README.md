@@ -310,8 +310,11 @@ set_effects(echo_time=0.3, echo_feedback=0.5, echo_bounce=True, reverb_size=0.8)
 | | |
 |---|---|
 | `echo_time`, `echo_feedback`, `echo_tone`, `echo_bounce` | seconds between echoes, how much each feeds the next (0 to 0.95), how much treble survives, and whether they bounce left and right |
-| `reverb_size`, `reverb_damping` | how big the room is, and how soon its treble dies |
+| `reverb_type`, `reverb_size`, `reverb_damping` | what kind of space the reverb is, how big it is, and how soon its treble dies |
+| `reverb_decay`, `reverb_predelay`, `reverb_low_cut` | seconds the tail takes to die away (0 leaves it to the type and the size), a gap before it begins, and where its bass is cut |
 | `chorus_rate`, `chorus_depth` | how fast and how far the chorus wobbles |
+
+The reverb is one room that every synth sends into, so its type and shape are one setting for everything: `set_effects(reverb_type="hall", reverb_decay=3)` and `lead.reverb_type = "hall"` do the same thing, and every synth reads the same value back. The types are `"room"`, `"hall"`, `"plate"`, `"cathedral"` and `"spring"`; `reverb_decay` is the seconds the tail takes to die away, `reverb_predelay` a gap before it begins, and `reverb_low_cut` keeps the bass out of it. With pydials it is a control like any other: `select("reverb", lead, "reverb_type")`.
 
 ## Samples
 
