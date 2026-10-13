@@ -333,6 +333,81 @@ Beats are counted from `set_tempo(120)` (beats a minute; beat 0 is the moment yo
 
 Sounds are placed on the exact sample they were asked for. That is why a tune you schedule with `after=` or `beat=`, or play with `play_notes`, stays in time even when your program is busy drawing. Everything is played a few hundredths of a second after it is asked for, so that this works; you will not notice it.
 
+## MIDI
+
+MIDI is how music keyboards, drum pads, boxes of knobs and synths talk to each other and to a computer. Plug a MIDI keyboard into your computer and one line makes it play a synth:
+
+```python
+lead = make_synth("keys", reverb=0.3)
+lead.play_from_midi()
+```
+
+It follows the notes, how hard you hit each key, the pitch wheel, the modulation wheel and the sustain pedal. The first time a program uses MIDI the browser asks whether the page may use your MIDI devices: say yes. `lead.play_from_midi(channel=2)` listens to one channel alone, and `lead.play_from_midi(False)` stops.
+
+The page plays the synth itself, where the keyboard is, and does not ask Python first. So a key sounds at once, even while your program is busy, or runs on another computer.
+
+MIDI works in Chrome, Edge and Firefox on a computer. Safari, iPhones and iPads have no MIDI for web pages. Where there is none your program still runs: it says so once, and everything else carries on.
+
+### Your own functions
+
+In a Pyctures scene, give a function one of these names and it is called, like `on_key_down`:
+
+```python
+def on_midi_note(note, velocity, channel):
+    play_sound("coin", velocity, pitch=note - 60)
+
+def on_midi_control(number, value, channel):
+    set_volume(value)
+```
+
+`note` is a number, where 60 is middle C, and `velocity` is how hard the key was hit, from 0 to 1. A key coming up calls `on_midi_note` with velocity 0, unless you write `def on_midi_note_off(note, channel):`, which is called then instead. `number` is which knob, slider or pedal it was (every one has a number from 0 to 127; the sustain pedal is 64) and `value` goes from 0 to 1. You may leave arguments off the end: `def on_midi_note(note, velocity):` is right too.
+
+`def on_midi(message):` is given everything: `message.type` is `"noteOn"`, `"noteOff"`, `"control"`, `"bend"`, `"program"` and so on, with `message.note`, `message.velocity`, `message.control`, `message.value`, `message.bend`, `message.channel`, `message.device` (the name of what sent it), `message.data` (the bytes themselves) and `message.time`: when it happened, on the clock that `sound_time()` reads.
+
+Your functions are called once a frame, with everything that arrived since the last one, so they hear a key up to a frame after it was pressed; `message.time` says exactly when. That wait is only for your own functions: `play_from_midi()` and `learn()` do not have it.
+
+Anywhere else, or to give a function another name, hand it over: `on_midi_note(played)`, `on_midi_note_off(let_go)`, `on_midi_control(turned)`, `on_midi(heard)`.
+
+### A knob turns a setting
+
+```python
+lead.learn("cutoff")                     # the next knob you turn on your controller is the cutoff from then on
+lead.map_midi(74, "resonance")           # or say which knob, by its number
+```
+
+The knob goes through the setting's whole range, so nothing has to be worked out, and the page changes the synth itself, at once. `lead.cutoff` reads back what the knob has set, a frame later. A dial on the screen that is tied to the same setting (`dial("cutoff", lead, "cutoff")`, with pydials) turns with the knob. A function given next is called with each new value: `lead.learn("cutoff", print)`. `min=200, max=4000` narrow the range, and `lead.unmap_midi("cutoff")` lets it go.
+
+### Sending
+
+A synth or a drum machine on your desk can be played from your program:
+
+```python
+send_midi_note("C4")                                  # a note, let go half a second later
+send_midi_note("C4", 0.8, length="quarter", channel=1)  # how hard, how long (seconds, or a note length), which channel (1 to 16)
+send_midi_note(["C4", "E4", "G4"], beat=4)            # a chord, on beat 4
+send_midi_control(74, 0.5)                            # turn knob 74 on the other device to half way
+send_midi([0x90, 60, 100])                            # any message at all, as its bytes
+```
+
+Everything that is sent takes `after=`, `at=` or `beat=` like a sound ([When things start](#when-things-start)) and leaves at exactly that time. There are also `send_midi_note_off("C4")` (for a note sent with `length=None`, which is held), `send_midi_bend(0.5)` and `send_midi_program(5)`, which chooses a sound by its number. `output="Minilogue"` on any of them says which device. `stop_sound()` lets go of every note that has been sent and takes back the ones still to come.
+
+`bass.send_to_midi()` sends what a synth plays, tunes and all, out as MIDI too; `channel=10` chooses the channel (10 is where drum machines listen). `send_midi_clock()` sends the beat, so that another device's own sequencer keeps time with `set_tempo`, and `send_midi_clock(False)` stops it.
+
+### Which device
+
+```python
+def found(devices):
+    print(devices["inputs"], devices["outputs"])     # the names of what is plugged in
+
+on_midi_devices(found)                   # called when they are known, and again when one is plugged in or pulled out
+use_midi_input("Keystation 49")          # listen to this one alone (otherwise: all of them)
+use_midi_output("Minilogue")             # send to this one (otherwise: the first)
+```
+
+`midi_devices()` gives the same `{"inputs": [...], "outputs": [...], "available": ...}` at any time, but the page has to be asked and its answer comes with a later frame: the first call gives empty lists with `available` as `None`. That is why `on_midi_devices` is there (in a scene, `def on_midi_devices(devices):`). `available` is `False` when there is no MIDI. `stop_midi()` forgets every function you gave and stops everything MIDI is doing.
+
+With no keyboard to hand, `receive_midi({"type": "noteOn", "note": 60, "velocity": 0.8, "channel": 1})` hands your program a message just as a keyboard would.
+
 ## Volume, mute and stop
 
 ```python
@@ -385,6 +460,7 @@ How the commands travel:
 
 - **In a Pyctures scene** they ride the frame's own message. The first sound of a frame adds one command to the frame, a call of `send(batch)` on the page's sound object (Pyctures' fixed handle 10), and the rest of that frame's sounds join the batch. It is the same in a browser's own Python (`pyctures build`), in your Python (`pyctures run`), and with Python on another computer. Sound asked for at the top of the file, in `setup()` or in `on_key_down()` is inside the same call from the page, so it leaves with that call's reply.
 - **A host of its own** calls `synths.connect(send)` and is handed each command at once, as `{"synths": 1, "now": …, "cmds": […]}`.
+- **MIDI** goes the same way. Its functions write a `midi` command into the same batches ([docs/midi.md](https://github.com/johnwylie70/synths.js/blob/main/docs/midi.md) of synths.js is the contract); the page, where the devices are, plays a synth from a keyboard and turns a setting from a knob without Python in between; and what was received comes back as plain data. In a Pyctures scene the page hands it over with the next frame, each message with its own time moved onto Python's clock. A host of its own gives `synths.receive_midi(events)` what its player's `onMidi` gave.
 - **Plain Python** has no player: the program is started again with `pyctures run`, or says how to.
 
 The names of every sound, synth and setting are those of synths.js, carried inside the module: `python scripts/sync_names.py` copies them from its `synths-names.json`, and a test fails while the two differ.
