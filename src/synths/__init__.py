@@ -1021,6 +1021,9 @@ class Synth:
         unit = "octaves" if entry["scale"] == 12 else entry.get("unit")
         if _UNITS.get(unit):
             d["unit"] = _UNITS[unit]
+        # A time from nothing to twenty seconds is turned evenly by how much longer it gets, from a thousandth of a second.
+        if unit == "seconds" and entry["min"] == 0 and entry["max"] >= 1:
+            d["min"], d["log"] = 0.001, True
         return d
 
     def _told(self, name, value):
