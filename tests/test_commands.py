@@ -49,8 +49,9 @@ def check(batch):
             assert isinstance(value, fields[name]), "%s.%s is %r" % (c["op"], name, value)
         if isinstance(c.get("arp"), dict):
             arp = c["arp"]
-            assert set(arp) == {"offsets", "rate", "order"} and len(arp["offsets"]) <= 8
-            assert all(isinstance(v, int) for v in arp["offsets"]) and arp["order"] in (0, 1, 2, 3, 4)
+            assert set(arp) <= set(synths._NAMES["arp"]["fields"]) and {"offsets", "order"} <= set(arp) and len(arp["offsets"]) <= 8
+            assert ("rate" in arp) != ("beats" in arp), "an arpeggio goes so many steps a second, or by the beat"
+            assert all(isinstance(v, int) for v in arp["offsets"]) and arp["order"] in (0, 1, 2, 3, 4, 5, 6)
         for name in NEEDS.get(c["op"], ()):
             assert name in c, "%s without %s" % (c["op"], name)
 
@@ -326,6 +327,32 @@ def test_chords_and_arpeggios(sent):
     held.stop()
     play_arp("Cm7")
     assert sent[-2] == {"op": "synth", "id": "s3", "preset": "chip", "t": sent[-2]["t"]} and sent[-1]["len"] == 0.5
+
+
+def test_a_musical_arpeggio_is_counted_in_beats(sent):
+    """As synths.js 812cf19 has it: a step that is a note length, a gate, octaves, swing, accents, a pattern, two more orders."""
+    lead = make_synth("lead")
+    lead.arp("Cm7", "whole", step="sixteenth", octaves=2, gate=0.5)
+    assert sent[-1]["arp"] == {"offsets": [0, 3, 7, 10], "order": 0, "beats": 0.25, "octaves": 2, "gate": 0.5} and sent[-1]["len"] == 2
+    held = lead.start_arp("Am", speed=30, order="together")
+    assert sent[-1]["arp"] == {"offsets": [0, 3, 7], "rate": 30, "order": 6} and sent[-1]["len"] is None
+    held.change("F", step="eighth", swing=0.2, accent=[1, 0.5, 0, 0.5])      # a step takes the place of the speed
+    assert sent[-1]["op"] == "voice" and sent[-1]["arp"] == {"offsets": [-4, 0, 3], "order": 6, "beats": 0.5, "swing": 0.2, "accent": [1, 0.5, 0, 0.5]}
+    held.pattern = "trance"
+    assert sent[-1]["arp"]["pattern"] == "trance" and sent[-1]["arp"]["beats"] == 0.5
+    held.speed = 20                                                          # and a speed the place of the step
+    assert sent[-1]["arp"]["rate"] == 20 and "beats" not in sent[-1]["arp"]
+    held.style = "slide"
+    assert sent[-1]["arp"]["style"] == "slide"
+    lead.arp("C", order="up-down2", pattern="1 - 3 2 _ 1 3 5^")
+    assert sent[-1]["arp"]["order"] == 5 and sent[-1]["arp"]["pattern"] == "1 - 3 2 _ 1 3 5^"
+    for how, says in (({"step": "sixteenth", "speed": 30}, "say how fast one way"), ({"style": "bounce"}, 'style is "strike"'),
+                      ({"accent": [2]}, "accent is how hard"), ({"pattern": "1 two 3"}, "a pattern is steps"),
+                      ({"order": "sideways"}, "not an order"), ({"step": "sixtieth"}, "step"), ({"octave": 2}, "arp takes")):
+        with pytest.raises(ValueError, match=says):
+            lead.arp("Cm7", **how)
+    for batch in sent.batches:
+        check(batch)
 
 
 def test_a_ready_made_synth_s_macro_reads_back(sent):

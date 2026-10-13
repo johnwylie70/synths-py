@@ -57,6 +57,15 @@ const pad = s.makeSynth('pad')
 pad.setSamples({ C3: 'a.wav' }, { crossfade: { keys: 2, loud: 0.1 }, oneShot: true })
 pad.samples = null
 s.makeSynth('lead', { samples: { C3: 'a.wav' }, cutoff: 900 })
+lead.arp('Cm7', 'whole', { step: 'sixteenth', octaves: 2, gate: 0.5 })
+const held = lead.startArp('Am', { step: 0.5, order: 'up-down2', swing: 0.2, accent: [1, 0.5, 0, 0.5] })
+held.change('F', { pattern: 'trance' })
+held.gate = 0.3
+held.speed = 30
+held.step = 'eighth'
+held.order = 'together'
+lead.arp(['C4', 'E4', 'G4'], 1, { style: 'slide', pattern: "1 - 3 2 _ 1 3 5^" })
+s.playArp('Cm7', { speed: 30, order: 'down' })
 s.stopMicrophone()
 await new Promise((yes) => setTimeout(yes, 0))
 s.flush()

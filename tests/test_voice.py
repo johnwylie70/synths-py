@@ -109,6 +109,15 @@ def test_the_same_program_writes_the_same_commands_as_synths_js(sent, tmp_path):
     pad.samples = None
     assert pad.zones() is None
     make_synth("lead", samples={"C3": "a.wav"}, cutoff=900)
+    lead.arp("Cm7", "whole", step="sixteenth", octaves=2, gate=0.5)
+    held = lead.start_arp("Am", step=0.5, order="up-down2", swing=0.2, accent=[1, 0.5, 0, 0.5])
+    held.change("F", pattern="trance")
+    held.gate = 0.3
+    held.speed = 30
+    held.step = "eighth"
+    held.order = "together"
+    lead.arp(["C4", "E4", "G4"], 1, style="slide", pattern="1 - 3 2 _ 1 3 5^")
+    play_arp("Cm7", speed=30, order="down")
     stop_microphone()
 
     def same(c):

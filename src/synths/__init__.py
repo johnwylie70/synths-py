@@ -242,6 +242,7 @@ _NAMES = json.loads(r'''
   {"id": 226, "name": "delay.level", "kind": "float", "min": 0, "max": 2, "default": 1, "unit": "gain", "scope": "all"}
  ],
  "names": {"wave": {"setting": "osc1.wave", "scale": 1}, "level1": {"setting": "osc1.level", "scale": 1}, "width": {"setting": "osc1.pulse_width", "scale": 1}, "pulseWidth": {"setting": "osc1.pulse_width", "scale": 1}, "sample": {"setting": "osc1.sample", "scale": 1}, "octave": {"setting": "transpose", "scale": 12}, "pitch": {"setting": "transpose", "scale": 1}, "maxVoices": {"setting": "voices", "scale": 1}, "voices": {"setting": "unison.voices", "scale": 1}, "detune": {"setting": "unison.detune", "scale": 1}, "spread": {"setting": "unison.spread", "scale": 1}, "wave2": {"setting": "osc2.wave", "scale": 1}, "level2": {"setting": "osc2.level", "scale": 1}, "pitch2": {"setting": "osc2.coarse", "scale": 1}, "detune2": {"setting": "osc2.fine", "scale": 1}, "width2": {"setting": "osc2.pulse_width", "scale": 1}, "sync": {"setting": "osc2.sync", "scale": 1}, "ring": {"setting": "osc2.ring", "scale": 1}, "sub": {"setting": "sub.level", "scale": 1}, "noise": {"setting": "noise.level", "scale": 1}, "macroRate": {"setting": "macro.rate", "scale": 1}, "macroSync": {"setting": "macro.sync", "scale": 1}, "filter": {"setting": "filter.type", "scale": 1}, "slope": {"setting": "filter.slope", "scale": 1}, "cutoff": {"setting": "filter.cutoff", "scale": 1}, "resonance": {"setting": "filter.resonance", "scale": 1}, "keytrack": {"setting": "filter.keytrack", "scale": 1}, "sweep": {"setting": "filter.env", "scale": 1}, "sweepAttack": {"setting": "filter_env.attack", "scale": 1}, "sweepDecay": {"setting": "filter_env.decay", "scale": 1}, "sweepSustain": {"setting": "filter_env.sustain", "scale": 1}, "sweepRelease": {"setting": "filter_env.release", "scale": 1}, "attack": {"setting": "amp.attack", "scale": 1}, "decay": {"setting": "amp.decay", "scale": 1}, "sustain": {"setting": "amp.sustain", "scale": 1}, "release": {"setting": "amp.release", "scale": 1}, "curve": {"setting": "amp.curve", "scale": 1}, "pitchSweep": {"setting": "mod_env.pitch", "scale": 1}, "pitchSweepAttack": {"setting": "mod_env.attack", "scale": 1}, "pitchSweepDecay": {"setting": "mod_env.decay", "scale": 1}, "vibrato": {"setting": "lfo1.pitch", "scale": 1}, "vibratoRate": {"setting": "lfo1.rate", "scale": 1}, "vibratoDelay": {"setting": "lfo1.delay", "scale": 1}, "tremolo": {"setting": "lfo1.amp", "scale": 1}, "wobble": {"setting": "lfo2.cutoff", "scale": 1}, "wobbleRate": {"setting": "lfo2.rate", "scale": 1}, "autopan": {"setting": "lfo2.pan", "scale": 1}, "pwm": {"setting": "lfo2.pulse_width", "scale": 1}, "pwmRate": {"setting": "lfo2.rate", "scale": 1}, "distortion": {"setting": "fx.drive", "scale": 1}, "drive": {"setting": "fx.drive", "scale": 1}, "crush": {"setting": "fx.bits", "scale": 1}, "bits": {"setting": "fx.bits", "scale": 1}, "downsample": {"setting": "fx.downsample", "scale": 1}, "pitchShift": {"setting": "fx.pitch", "scale": 1}, "ringMod": {"setting": "fx.ring", "scale": 1}, "ringSpeed": {"setting": "fx.ring_freq", "scale": 1}, "ringWave": {"setting": "fx.ring_wave", "scale": 1}, "comb": {"setting": "fx.comb", "scale": 1}, "combTone": {"setting": "fx.comb_freq", "scale": 1}, "combFeedback": {"setting": "fx.comb_feedback", "scale": 1}, "flanger": {"setting": "fx.comb_depth", "scale": 1}, "flangerRate": {"setting": "fx.comb_rate", "scale": 1}, "reverse": {"setting": "osc1.reverse", "scale": 1}, "echo": {"setting": "send.delay", "scale": 1}, "delay": {"setting": "send.delay", "scale": 1}, "reverb": {"setting": "send.reverb", "scale": 1}, "chorus": {"setting": "send.chorus", "scale": 1}, "masterVolume": {"setting": "master.volume", "scale": 1}, "limiter": {"setting": "master.limiter", "scale": 1}, "echoTime": {"setting": "delay.time", "scale": 1}, "echoFeedback": {"setting": "delay.feedback", "scale": 1}, "echoTone": {"setting": "delay.tone", "scale": 1}, "echoBounce": {"setting": "delay.pingpong", "scale": 1}, "reverbSize": {"setting": "reverb.size", "scale": 1}, "reverbDamping": {"setting": "reverb.damping", "scale": 1}, "reverbType": {"setting": "reverb.type", "scale": 1}, "reverbDecay": {"setting": "reverb.decay", "scale": 1}, "reverbPredelay": {"setting": "reverb.predelay", "scale": 1}, "reverbLowCut": {"setting": "reverb.low_cut", "scale": 1}, "chorusRate": {"setting": "chorus.rate", "scale": 1}, "chorusDepth": {"setting": "chorus.depth", "scale": 1}, "micGain": {"setting": "input.gain", "scale": 1}, "micGate": {"setting": "input.gate", "scale": 1}, "micGateRelease": {"setting": "input.gate_release", "scale": 1}},
+ "arp": {"words": ["speed", "step", "order", "style", "gate", "octaves", "swing", "accent", "pattern"], "styles": ["slide", "strike"], "patterns": ["bounce", "octaves", "root-fifth", "thumb", "converge", "diverge", "offbeat", "gallop", "trance", "acid"], "fields": ["offsets", "rate", "beats", "order", "octaves", "gate", "style", "swing", "accent", "pattern"]},
  "choiceWords": {"square": "pulse", "sawtooth": "saw", "tri": "triangle", "sin": "sine", "low": "lowpass", "high": "highpass", "band": "bandpass", "none": "off", "hiss": "white", "chip": "lfsr", "buzz": "lfsr_short"},
  "plain": {"filter": "lowpass", "cutoff": 20000, "resonance": 0.1},
  "synths": {
@@ -283,7 +284,7 @@ _NAMES = json.loads(r'''
   "lose": {"patch": {"wave": "triangle", "wave2": "square", "level2": 0.3, "cutoff": 2500, "attack": 0, "decay": 0.3, "sustain": 0.5, "release": 0.2}, "notes": [[0, 67, 0.16, 0.8], [0.17, 63, 0.16, 0.8], [0.34, 60, 0.16, 0.8], [0.51, 55, 0.5, 0.8, 43, 0.5]]}
  },
  "chords": {"5": [0, 7], "6": [0, 4, 7, 9], "7": [0, 4, 7, 10], "9": [0, 4, 7, 10, 14], "major": [0, 4, 7], "maj": [0, 4, 7], "minor": [0, 3, 7], "min": [0, 3, 7], "m": [0, 3, 7], "dim": [0, 3, 6], "aug": [0, 4, 8], "sus2": [0, 2, 7], "sus4": [0, 5, 7], "sus": [0, 5, 7], "power": [0, 7], "octave": [0, 12], "m6": [0, 3, 7, 9], "dom7": [0, 4, 7, 10], "maj7": [0, 4, 7, 11], "m7": [0, 3, 7, 10], "min7": [0, 3, 7, 10], "dim7": [0, 3, 6, 9], "m7b5": [0, 3, 6, 10], "mmaj7": [0, 3, 7, 11], "add9": [0, 4, 7, 14], "maj9": [0, 4, 7, 11, 14], "m9": [0, 3, 7, 10, 14]},
- "orders": {"up": 0, "down": 1, "updown": 2, "written": 3, "aswritten": 3, "given": 3, "random": 4},
+ "orders": {"up": 0, "down": 1, "updown": 2, "written": 3, "aswritten": 3, "given": 3, "random": 4, "updown2": 5, "together": 6, "stab": 6},
  "macroWaves": {"sine": 0, "triangle": 1, "saw": 2, "pulse": 3, "square": 3, "noise": 4},
  "lengths": {"whole": 4, "half": 2, "quarter": 1, "eighth": 0.5, "sixteenth": 0.25, "thirtysecond": 0.125},
  "lengthLetters": {"w": 4, "h": 2, "q": 1, "e": 0.5, "s": 0.25, "t": 0.125},
@@ -627,15 +628,16 @@ def _notes_of(what):
 
 
 def _order_of(order, said):
-    """The order of an arpeggio as the engine's number, from "up", "down", "up-down", "as written" or "random"."""
+    """The order of an arpeggio as the engine's number, from "up", "down", "up-down", "up-down2", "as written", "random" or "together"."""
     if order is None:
         return 0
-    if _is_number(order) and 0 <= order <= 4:
+    if _is_number(order) and 0 <= order <= 6:
         return int(order)
     found = _NAMES.get("orders", {}).get(_key(order))
     if found is None:
-        raise ValueError("%s: %s is not an order an arpeggio can go in.%s The orders are: up, down, up-down, as written, random"
-                         % (said, _shown(order), _meant(str(order), ["up", "down", "up-down", "as written", "random"])))
+        orders = ["up", "down", "up-down", "up-down2", "as written", "random", "together"]
+        raise ValueError("%s: %s is not an order an arpeggio can go in.%s The orders are: up, down, up-down, up-down2 (the top "
+                         "and bottom notes twice), as written, random, together" % (said, _shown(order), _meant(str(order), orders)))
     return found
 
 
@@ -649,13 +651,60 @@ def _chord_of(chord, kind, said):
     return notes
 
 
-def _arp_of(notes, root, speed, order, said):
-    """An arpeggio as a command carries it: semitones from the note the voice was started on, a rate and an order."""
+# What an arpeggio may be told (synths.js: ARP_WORDS), kept between changes of its chord; and a step of a pattern written out.
+_ARP_WORDS = ("speed", "step", "rate", "order", "style", "gate", "octaves", "swing", "accent", "accents", "pattern")
+_ARP_STEP = re.compile(r"^(?:~?\d{1,2}[',]*\^?(?::\d)?|[-._])$")
+
+
+def _arp_words(how):
+    """The words of an arpeggio among what a call was given (taken out of it), without those left unsaid."""
+    return {w: v for w, v in ((w, how.pop(w, None)) for w in _ARP_WORDS) if v is not None}
+
+
+def _arp_of(notes, root, o, said):
+    """An arpeggio as a command carries it: semitones from the note the voice was started on, a rate and an order;
+    and, for one the engine's arpeggiator plays, its step in beats, style, gate, octaves, swing, accents or pattern."""
     offsets = [n - root for n in notes]
     if any(v != int(v) or not -128 <= v <= 127 for v in offsets):
         raise ValueError("%s: the notes of an arpeggio have to be whole notes within ten octaves of the first one" % said)
-    return {"offsets": [int(v) for v in offsets], "rate": 50 if speed is None else _amount(speed, "%s: speed" % said, 0.1, 1000),
-            "order": _order_of(order, said)}
+    speed = o.get("speed")
+    arp = {"offsets": [int(v) for v in offsets], "rate": 50 if speed is None else _amount(speed, "%s: speed" % said, 0.1, 1000),
+           "order": _order_of(o.get("order"), said)}
+    # Counted in beats: each step a note length ("sixteenth"), or so many beats, which follows the tempo.
+    step = o.get("step", o.get("rate"))
+    if step is not None:
+        if speed is not None:
+            raise ValueError('%s: say how fast one way: step (a note length, as in step="sixteenth") or speed (steps a second), '
+                             "not both" % said)
+        arp["beats"] = _beats_long(step, "%s: step" % said) if isinstance(step, str) else _amount(step, "%s: step" % said, 1 / 64, 16)
+        del arp["rate"]
+    if o.get("style") is not None:
+        if o["style"] not in _NAMES["arp"]["styles"]:
+            raise ValueError('%s: style is "strike" (each step a new note) or "slide" (one voice whose pitch jumps), not %s'
+                             % (said, _shown(o["style"])))
+        arp["style"] = o["style"]
+    if o.get("gate") is not None:
+        arp["gate"] = _amount(o["gate"], "%s: gate" % said, 0.05, 1)
+    if o.get("octaves") is not None:
+        arp["octaves"] = int(math.floor(_amount(o["octaves"], "%s: octaves" % said, 1, 4) + 0.5))
+    if o.get("swing") is not None:
+        arp["swing"] = _amount(o["swing"], "%s: swing" % said, 0, 0.75)
+    accent = o.get("accent", o.get("accents"))
+    if accent is not None:
+        if not isinstance(accent, (list, tuple)) or len(accent) > 8 or not all(_is_number(v) and 0 <= v <= 1 for v in accent):
+            raise ValueError("%s: accent is how hard each step is struck, up to eight numbers from 0 (a rest) to 1, as in "
+                             "accent=[1, 0.5, 0.5, 0.5], not %s" % (said, _shown(accent)))
+        arp["accent"] = list(accent)
+    if o.get("pattern") is not None:
+        text = o["pattern"].strip() if isinstance(o["pattern"], str) else ""
+        steps = text.split()
+        patterns = _NAMES["arp"]["patterns"]
+        if not text or (text not in patterns and (len(steps) > 32 or not all(_ARP_STEP.match(t) for t in steps))):
+            raise ValueError("%s: a pattern is steps with spaces between them, as in pattern=\"1 - 3 2 _ 1 3 5^\" (a number is that "
+                             "note of the chord, - a rest, _ holds the last note, ' an octave up, ^ an accent), or one by name: %s; "
+                             "not %s" % (said, ", ".join(patterns), _shown(o["pattern"])))
+        arp["pattern"] = text
+    return arp
 
 
 def _check_macro(macro, said):
@@ -1195,22 +1244,32 @@ class Note:
 
 
 class Arp(Note):
-    """An arpeggio that is sounding: what arp() and start_arp() give back. Its chord can be changed as it plays."""
+    """An arpeggio that is sounding: what arp() and start_arp() give back. Its chord can be changed as it plays, and
+    so can its speed, step, order, gate, octaves, swing, accent and pattern: arp.gate = 0.3."""
 
-    def __init__(self, sound, synth, h, root, speed, order, now):
+    def __init__(self, sound, synth, h, root, how, now):
         Note.__init__(self, sound, synth, h)
         object.__setattr__(self, "_root", root)
-        object.__setattr__(self, "_how", [speed, order])
+        object.__setattr__(self, "_how", dict(how))
         object.__setattr__(self, "_now", now)
 
-    def change(self, chord, kind=None, *, speed=None, order=None, after=None, at=None, beat=None):
-        """Another chord, without starting the note again: arp.change("Fm"), arp.change("F4", "minor"), or a list of notes."""
-        how = self._how
-        how[0] = how[0] if speed is None else speed
-        how[1] = how[1] if order is None else order
+    def change(self, chord, kind=None, *, after=None, at=None, beat=None, **how):
+        """Another chord, without starting the note again: arp.change("Fm"), arp.change("F4", "minor"), or a list of
+        notes. What an arpeggio may be told can be said here too: arp.change("Fm", gate=0.3)."""
+        told = _arp_words(how)
+        if how:
+            raise ValueError("change takes a chord, %s, after, at and beat, not %s" % (", ".join(_NAMES["arp"]["words"]), ", ".join(how)))
+        kept = self._how
+        # A new speed takes the place of a step, and a step of a speed.
+        if "speed" in told:
+            kept.pop("step", None)
+            kept.pop("rate", None)
+        elif "step" in told or "rate" in told:
+            kept.pop("speed", None)
+        kept.update(told)
         s = self._sound
         s.command({"op": "voice", "id": self._synth, "h": self._h,
-                   "arp": _arp_of(_chord_of(chord, kind, "change"), self._root, how[0], how[1], "change"),
+                   "arp": _arp_of(_chord_of(chord, kind, "change"), self._root, kept, "change"),
                    "t": s.when("change", after, at, beat)})
         object.__setattr__(self, "_now", (chord, kind))
         return self
@@ -1218,10 +1277,8 @@ class Arp(Note):
     def __setattr__(self, name, value):
         if name == "chord":
             self.change(value)
-        elif name == "speed":
-            self.change(*self._now, speed=value)
-        elif name == "order":
-            self.change(*self._now, order=value)
+        elif name in _NAMES["arp"]["words"]:
+            self.change(*self._now, **{name: value})
         else:
             Note.__setattr__(self, name, value)
 
@@ -1461,23 +1518,24 @@ class Synth:
                 kind = arg
             elif isinstance(arg, str) or _is_number(arg):
                 length = arg
-        speed, order = how.pop("speed", None), how.pop("order", None)
+        told = _arp_words(how)
         volume, pan = how.pop("volume", None), how.pop("pan", None)
         when = {k: how.pop(k, None) for k in ("after", "at", "beat")}
         if how:
-            raise ValueError("%s takes length, kind, speed, order, volume, pan, after, at and beat, not %s" % (said, ", ".join(how)))
+            raise ValueError("%s takes length, kind, %s, volume, pan, after, at and beat, not %s"
+                             % (said, ", ".join(_NAMES["arp"]["words"]), ", ".join(how)))
         notes = _chord_of(chord, kind, said)
         s = self._sound
         s.handles = 1 if s.handles >= 0x7FFFFFF0 else s.handles + 1
         c = {"op": "note", "id": self._id, "note": [notes[0]],
              "len": usual if length is None else self._sound.length(length, "%s: the length" % said), "h": s.handles,
-             "arp": _arp_of(notes, notes[0], speed, order, said), "t": s.when(said, **when)}
+             "arp": _arp_of(notes, notes[0], told, said), "t": s.when(said, **when)}
         if volume is not None:
             c["vel"] = _amount(volume, "%s: volume" % said)
         if pan is not None:
             c["pan"] = _amount(pan, "%s: pan" % said, -1, 1)
         s.command(c)
-        return Arp(s, self._id, s.handles, notes[0], speed, order, (chord, kind))
+        return Arp(s, self._id, s.handles, notes[0], told, (chord, kind))
 
     def set_macro(self, macro):
         """A step macro: a short list of steps that every note of this synth plays through, fifty a second (the setting
