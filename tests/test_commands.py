@@ -23,7 +23,8 @@ FORMAT = {
     "stop": {"id": str},
     "master": {"volume": NUMBER, "mute": bool, "set": dict},
     "free": {"id": str},
-    "song": {"id": str, "do": str, "url": str, "bytes": str, "name": str, "loop": bool, "vol": NUMBER},
+    "song": {"id": str, "do": str, "url": str, "bytes": str, "name": str, "repeat": bool, "vol": NUMBER, "raw": bool,
+             "patches": dict, "files": dict, "order": int, "row": int},
 }
 NEEDS = {"synth": ["id"], "set": ["id", "set"], "note": ["id"], "off": ["id"], "voice": ["id", "h"], "sound": ["name"],
          "sample": ["id"], "tune": ["id", "synth", "steps"], "free": ["id"], "song": ["do"], "macro": ["id", "macro"]}
@@ -100,8 +101,11 @@ def test_everything_the_library_writes_is_in_the_format(sent, tmp_path):
     drum.play()
     drum.play("E4", 2)
     load_sample("not_here.wav").play()
-    song = play_song("tune.mod", volume=0.5)
-    song.pause(), song.resume(), song.stop()
+    song = play_song("tune.mod", volume=0.5, repeat=False, raw=True, patches={"wobble": "bass", "pling": {"preset": "chip_lead", "echo": 0.4}})
+    song.pause(), song.resume(), song.seek(2, 16), song.stop()
+    song.volume = 0.5
+    song.repeat = True
+    play_song(b"M.K.")
     stop_song()
     set_volume(0.5)
     mute_sound()
@@ -226,10 +230,21 @@ def test_a_mistake_writes_no_command(sent):
     assert [c["op"] for c in sent] == ["synth"]      # the synth play_notes plays on, made before its notes were read
 
 
-def test_a_song_says_once_that_it_is_not_ready(sent, capsys):
-    synths._said.clear()
-    play_song("tune.mod")
-    play_song("other.mod")
-    said = capsys.readouterr().err
-    assert said.count("tracker songs are not ready yet") == 1
-    assert [c["do"] for c in sent] == ["play", "play"]
+def test_a_song_is_sent_whole_when_python_has_it(sent, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "songs").mkdir()
+    (tmp_path / "songs" / "kick.wav").write_bytes(b"RIFF")
+    (tmp_path / "songs" / "mine.json").write_text('{"samples": [{"file": "kick.wav"}, {"file": "gone.wav"}, {}]}')
+    play_song("songs/mine.json", patches={"tune": "bell", "low": {"preset": "chip_bass", "cutoff": 300}})
+    c = sent[-1]
+    assert c["name"] == "songs/mine.json" and "url" not in c and c["repeat"] is True
+    assert c["files"] == {"kick.wav": "UklGRg=="}, "the WAV files it names that are there go with it"
+    assert c["patches"] == {"tune": "bell", "low": {"cutoff": 300, "preset": "chipBass"}}
+    play_song("not_here.mod", repeat=False)
+    assert sent[-1]["url"] == "not_here.mod" and "bytes" not in sent[-1] and sent[-1]["repeat"] is False
+    song = play_song("not_here.xm")
+    song.seek(2, 16)
+    assert sent[-1] == {"op": "song", "id": song.id, "do": "seek", "order": 2, "row": 16, "t": sent[-1]["t"]}
+    with pytest.raises(ValueError) as e:
+        play_song("x.mod", patches={"low": "bas"})
+    assert str(e.value).startswith('play_song: the patch "low" names a synth called "bas", and there is none. Did you mean "bass"?')

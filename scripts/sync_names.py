@@ -7,8 +7,12 @@ synths.js, which publishes them as ``synths-names.json``; this puts that file's 
 ``src/synths/__init__.py`` between the two NAMES lines, so the package is one file that needs
 nothing beside it (it is loaded as one file where Python runs in a browser). Run it again
 whenever synths.js changes. The tests fail while the two differ.
+
+The names are taken as synths.js last COMMITTED them, not as its files stand, so work that is
+half done there is not brought across. ``--working`` takes the files as they are.
 """
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -45,9 +49,20 @@ def written(names):
     return text
 
 
+def committed(repo, name, working=False):
+    """A file of a repository as it was last committed (or as it stands: `working`, or where there is no git)."""
+    if not working:
+        try:
+            return subprocess.run(["git", "-C", str(repo), "show", "HEAD:" + name], capture_output=True, check=True).stdout
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    return (Path(repo) / name).read_bytes()
+
+
 def main():
-    source = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT.parent / "synths.js"
-    names = json.loads((source / "synths-names.json").read_text(encoding="utf-8"))
+    args = [a for a in sys.argv[1:] if a != "--working"]
+    source = Path(args[0]) if args else ROOT.parent / "synths.js"
+    names = json.loads(committed(source, "synths-names.json", "--working" in sys.argv).decode("utf-8"))
     module = MODULE.read_text(encoding="utf-8")
     head, rest = module.split(BEGIN, 1)
     _, tail = rest.split(END, 1)

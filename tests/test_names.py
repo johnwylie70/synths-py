@@ -5,25 +5,24 @@ import re
 import pytest
 
 import synths
-from conftest import JS_REPO, ROOT
+from conftest import ROOT, of_synths_js
 
 
 def test_the_names_are_those_of_synths_js():
     """Fails while the two differ: run scripts/sync_names.py."""
-    file = JS_REPO / "synths-names.json"
-    if not file.exists():
+    names = of_synths_js("synths-names.json")
+    if names is None:
         pytest.skip("synths.js is not beside this repository")
-    assert synths._NAMES == json.loads(file.read_text(encoding="utf-8")), "run: python scripts/sync_names.py"
+    assert synths._NAMES == json.loads(names), "run: python scripts/sync_names.py"
 
 
 def test_every_function_of_synths_js_has_its_python_spelling():
-    source = JS_REPO / "synths.js"
-    if not source.exists():
+    text = of_synths_js("synths.js")
+    if text is None:
         pytest.skip("synths.js is not beside this repository")
-    text = source.read_text(encoding="utf-8")
     # The Python spellings synths.js itself exports: `playSound as play_sound, …`.
     spelled = set(re.findall(r"\b\w+ as ([a-z_]+)\b", text[text.rindex("export {"):]))
-    hosts = {"create_sound", "render_sound"}        # for a host's page: Python has connect()
+    hosts = {"create_sound", "render_sound", "pack_song"}        # for a host's page: Python has connect()
     missing = sorted(n for n in spelled - hosts if not callable(getattr(synths, n, None)))
     assert not missing, "synths.js has these and Python does not: %s" % missing
     for name in ("beats", "beat"):

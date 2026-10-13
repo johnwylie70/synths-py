@@ -9,7 +9,7 @@ from conftest import ROOT
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 BLOCKS = re.findall(r"```python\n(.*?)```", README, re.S)
 # These are parts of a Pyctures scene: they are run there, in Pyctures' own tests.
-SCENES = ("Sprite(", "from controls", "star.touches")
+SCENES = ("Sprite(", "from pydials", "star.touches")
 
 
 @pytest.mark.parametrize("code", [b for b in BLOCKS if not any(s in b for s in SCENES)],

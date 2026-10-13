@@ -8,6 +8,15 @@ ROOT = Path(__file__).resolve().parent.parent
 JS_REPO = ROOT.parent / "synths.js"
 
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+
+def of_synths_js(name):
+    """A file of synths.js as it was last committed, as text; None when synths.js is not beside this repository."""
+    from sync_names import committed
+    if not (JS_REPO / name).exists():
+        return None
+    return committed(JS_REPO, name).decode("utf-8")
 
 
 @pytest.fixture

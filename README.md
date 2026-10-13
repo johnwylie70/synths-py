@@ -2,7 +2,7 @@
 
 [![MIT licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
-synths is for making sounds and music in Python, and for enjoying it: game sounds in one line, notes and tunes, synths you shape yourself, arpeggios, recorded samples and effects. It is for any age and any level. You type a line and hear something. It is the sound sibling of [Pyctures](https://github.com/johnwylie70/pyctures), designed for projects made in [Circuitry Studio](https://www.circuitry.dev).
+synths is for making sounds and music in Python, and for enjoying it: game sounds in one line, notes and tunes, synths you shape yourself, arpeggios, recorded samples, effects and tracker songs. It is for any age and any level. You type a line and hear something. It is the sound sibling of [Pyctures](https://github.com/johnwylie70/pyctures), designed for projects made in [Circuitry Studio](https://www.circuitry.dev).
 
 Prefer JavaScript? [synths.js](https://github.com/johnwylie70/synths.js) is the same library for JavaScript, with the same names. The sound engine itself is [synths-core](https://github.com/johnwylie70/synths-core).
 
@@ -109,12 +109,12 @@ def draw():
     ball.draw()
 ```
 
-With [controls](https://github.com/johnwylie70/controls-py), dials and a piano keyboard on the screen play a synth and shape it:
+With [pydials](https://github.com/johnwylie70/pydials), dials and a piano keyboard on the screen play a synth and shape it:
 
 ```python
 from pyctures import *
 from synths import *
-from controls import *
+from pydials import *
 
 lead = make_synth("lead")
 dial("cutoff", lead, "cutoff")
@@ -280,11 +280,27 @@ stop_sound()         # stop everything that is sounding or waiting to sound
 
 ## Songs
 
+A song is a whole piece of music in one file, played by the sound engine itself: a tracker's `.mod` or `.xm` file, or a song in synths' own format, which is text you can read and change.
+
 ```python
-play_song("tune.mod")
+song = play_song("tune.mod")          # it goes round and round until it is stopped
+
+song.pause()
+song.resume()
+song.volume = 0.5
+song.seek(2)                          # jump to the third part of the song (and seek(2, 16): its row 16)
+song.stop()
 ```
 
-Tracker songs (`.mod`, `.xm`) are **not ready yet**. `play_song` is here so programs can be written for it: today it plays nothing and says so once, and the rest of your sound is not affected.
+`play_song("tune.xm", repeat=False)` plays it once, and `volume=0.6` starts it quieter. One song plays at a time, and your own notes and game sounds play over it.
+
+In a song of synths' own, an instrument can be a synth instead of a recording, called by a name. A name that is a ready-made synth's (`"bass"`, `"chip_kick"`) plays as that; any other name is told what it is:
+
+```python
+play_song("songs/night_drive.json", patches={"tune": "bell", "wobble": {"preset": "bass", "cutoff": 300, "wobble": 12}})
+```
+
+A `.mod` or `.xm` sounds as its tracker made it sound, rough edges included; `raw=False` smooths the samples and `raw=True` leaves any song rough. The format of synths' own songs is described in [synths-core](https://github.com/johnwylie70/synths-core/blob/main/docs/song-format.md).
 
 ## Mistakes
 

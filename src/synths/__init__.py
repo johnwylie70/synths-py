@@ -13,7 +13,7 @@
     lead.arp("Cm7")                        # a chord from one voice, as a fast arpeggio (a C64 chord)
     chord = lead.start_arp("Am")           # one that stays: chord.change("F"), chord.stop()
     drum = load_sample("kick.wav")         # a recorded sound from a file; drum.play()
-    play_song("tune.mod")                  # a tracker song (not ready yet in this version)
+    song = play_song("tune.mod")           # a tracker song (.mod, .xm) or one of synths' own: song.pause(), song.stop()
     set_volume(0.5), mute_sound(), unmute_sound(), stop_sound()
     set_effects(echo_time=0.3, reverb_size=0.8)
     set_tempo(120), beats(2)               # beats(2) is how many seconds two beats last
@@ -90,6 +90,7 @@ _NAMES = json.loads(r'''
   {"id": 9, "name": "unison.detune", "kind": "float", "min": 0, "max": 100, "default": 20, "unit": "cents", "scope": "synth"},
   {"id": 10, "name": "unison.spread", "kind": "float", "min": 0, "max": 1, "default": 0.5, "unit": "", "scope": "synth"},
   {"id": 11, "name": "velocity", "kind": "float", "min": 0, "max": 1, "default": 1, "unit": "", "scope": "synth"},
+  {"id": 12, "name": "pan.law", "kind": "choice", "min": 0, "max": 1, "default": 0, "unit": "", "choices": ["equal_power", "square_root"], "scope": "synth"},
   {"id": 16, "name": "osc1.wave", "kind": "choice", "min": 0, "max": 4, "default": 1, "unit": "", "choices": ["sine", "triangle", "saw", "pulse", "sample"], "scope": "synth"},
   {"id": 17, "name": "osc1.level", "kind": "float", "min": 0, "max": 1, "default": 1, "unit": "gain", "scope": "synth"},
   {"id": 18, "name": "osc1.coarse", "kind": "float", "min": -48, "max": 48, "default": 0, "unit": "semitones", "scope": "synth"},
@@ -807,24 +808,38 @@ class Tune:
 
 
 class Song:
-    """A tracker song: what play_song() gives back."""
+    """A song that is playing: what play_song() gives back."""
 
     def __init__(self, sound, id):
-        self._sound = sound
-        self.id = id
+        object.__setattr__(self, "_sound", sound)
+        object.__setattr__(self, "id", id)
 
-    def _do(self, what):
-        self._sound.command({"op": "song", "id": self.id, "do": what, "t": self._sound.clock()})
+    def _do(self, what, **more):
+        self._sound.command(dict({"op": "song", "id": self.id, "do": what}, t=self._sound.clock(), **more))
         return self
 
     def stop(self):
+        """Stop it, and go back to its start."""
         return self._do("stop")
 
     def pause(self):
+        """Hold it where it is, until resume()."""
         return self._do("pause")
 
     def resume(self):
         return self._do("resume")
+
+    def seek(self, order, row=0):
+        """Go to a place in the song: a part of it (its order list, from 0), then a row of the pattern there."""
+        return self._do("seek", order=int(_amount(order, "seek: the order", 0, 65535)), row=int(_amount(row, "seek: the row", 0, 255)))
+
+    def __setattr__(self, name, value):
+        if name == "volume":
+            self._do("volume", vol=_amount(value, "volume", 0, 2))
+        elif name == "repeat":
+            self._do("repeat", repeat=bool(value))
+        else:
+            object.__setattr__(self, name, value)
 
 
 # What a setting is measured in, as a dial shows it (a dial in Hz turns evenly by pitch).
@@ -1233,24 +1248,79 @@ def play_sound(name=None, volume=None, *, pitch=None, pan=None, after=None, at=N
     s.command(c)
 
 
-def play_song(path=None, *, loop=True, volume=None, after=None, at=None, beat=None):
-    """A tracker song (.mod, .xm). NOT READY YET: it plays nothing and says so once; the rest of your sound is not affected."""
-    if not isinstance(path, str) or not path.strip():
+def play_song(file=None, *, repeat=True, loop=None, volume=None, raw=None, patches=None, after=None, at=None, beat=None):
+    """Play a song: a tracker's .mod or .xm file, or a song in synths' own format (.json). song = play_song("tune.mod").
+    It goes round until it is stopped: song.pause(), song.resume(), song.volume = 0.5, song.seek(2), song.stop().
+    repeat=False plays it once. One song plays at a time, and your own notes and game sounds play over it.
+    A song whose instruments are synths by name is told what they are with patches={"wobble": "bass",
+    "pling": {"preset": "pluck", "echo": 0.4}}; a name that is a ready-made synth's needs no telling."""
+    given = isinstance(file, (bytes, bytearray))
+    if not given and (not isinstance(file, str) or not file.strip()):
         raise ValueError('play_song(%s) needs the name of a song file, as in play_song("tune.mod")'
-                         % ("" if path is None else _shown(path)))
-    _tell("tracker songs are not ready yet in this version, so play_song plays nothing. The rest of your sound is not affected.")
+                         % ("" if file is None else _shown(file)))
     s = _sound()
     id = s.id("g")
-    c = {"op": "song", "id": id, "do": "play", "name": path, "loop": loop is not False, "t": s.when("play_song", after, at, beat)}
-    data = _file(path)
-    if data is not None:
-        c["bytes"] = data
-    else:
-        c["url"] = path
+    c = {"op": "song", "id": id, "do": "play", "repeat": (repeat if loop is None else loop) is not False,
+         "t": s.when("play_song", after, at, beat)}
     if volume is not None:
-        c["vol"] = _amount(volume, "play_song: volume", 0, 4)
+        c["vol"] = _amount(volume, "play_song: volume", 0, 2)
+    if raw is not None:
+        c["raw"] = bool(raw)
+    if patches is not None:
+        c["patches"] = _song_patches(patches)
+    if given:
+        c["bytes"] = base64.b64encode(bytes(file)).decode("ascii")
+    else:
+        c["name"] = file
+        data = _file(file)
+        if data is None:
+            c["url"] = file         # the page fetches it from beside the scene, and the files it names
+        else:
+            c["bytes"] = data       # Python has the file, and the WAV files one of synths' own songs names
+            files = {}
+            for name in _song_files(data):
+                more = _file(os.path.join(os.path.dirname(file), name))
+                if more is not None:
+                    files[name] = more
+            if files:
+                c["files"] = files
     s.command(c)
     return Song(s, id)
+
+
+def _song_files(data):
+    """The WAV files a song in synths' own format names for its samples (it is JSON; a .mod or .xm names none)."""
+    try:
+        song = json.loads(base64.b64decode(data).decode("utf-8"))
+        return sorted({sample["file"] for sample in song.get("samples") or [] if isinstance(sample, dict) and isinstance(sample.get("file"), str)})
+    except (ValueError, AttributeError, TypeError):
+        return []
+
+
+def _song_patches(patches):
+    """What a song's instruments that are synths by name are, checked: {"wobble": "bass", "pling": {"preset": "pluck", "echo": 0.4}}."""
+    if not isinstance(patches, dict):
+        raise ValueError('play_song: patches needs names and what each is, as in patches={"wobble": "bass"}, not %s' % _shown(patches))
+    names = [_snake(n) for n in _NAMES["synths"] if n != "sample"]
+    out = {}
+    for name, what in patches.items():
+        said = "play_song: the patch %s" % _shown(name)
+        if not isinstance(what, (str, dict)):
+            raise ValueError("%s needs the name of a synth or settings, not %s" % (said, _shown(what)))
+        preset = what if isinstance(what, str) else what.get("preset")
+        found = None
+        if preset is not None:
+            found = _PRESETS.get(_key(preset)) if isinstance(preset, str) else None
+            if found is None or found == "sample":
+                raise ValueError("%s names a synth called %s, and there is none.%s The synths are: %s"
+                                 % (said, _shown(preset), _meant(preset, names), ", ".join(names)))
+        if isinstance(what, str):
+            out[name] = found
+        else:
+            _patch_of(what, said, True)
+            _check_macro(what.get("macro"), said)
+            out[name] = dict(_sendable({k: v for k, v in what.items() if k != "preset"}), **({"preset": found} if found else {}))
+    return out
 
 
 def stop_song():
