@@ -145,6 +145,15 @@ def test_a_voice_puts_back_what_the_last_one_changed(sent):
     assert [c["voice"] for c in sent if "voice" in c] == ["robot", "chipmunk", "none"]
 
 
+def test_a_control_gives_a_voice_as_its_number_in_the_list(sent):
+    lead = make_synth("lead")
+    assert lead.describe("voice")["choices"][2] == "chipmunk"
+    lead.set("voice", 2)                 # what a picker tied to a synth in Python writes
+    assert lead.voice == "chipmunk" and lead.get("voice") == "chipmunk" and sent[-1]["voice"] == "chipmunk"
+    lead._told("voice", 1)               # and what the page reports of one tied to it there: nothing is sent again
+    assert lead.voice == "robot" and len([c for c in sent if "voice" in c]) == 1
+
+
 def test_a_voice_that_is_not_one_is_said_in_plain_words(sent):
     lead = make_synth("lead")
     with pytest.raises(ValueError, match=r'"robt" is not a voice. Did you mean "robot"\? The voices are: robot, chipmunk, .*and "none"'):

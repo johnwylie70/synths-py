@@ -1524,6 +1524,10 @@ class Synth:
         self._wear(name, self._sound.clock())
 
     def _wear(self, name, at=None, send=True):
+        # A control that keeps a choice as its number in the list gives the number.
+        choices = ["none"] + list(_VOICES["rows"])
+        if _is_number(name) and 0 <= name < len(choices) and name == int(name):
+            name = choices[int(name)]
         voice = _voice_name(name) if isinstance(name, str) or name is None or name is False else None
         if voice is None:
             names = list(_VOICES["rows"])
@@ -1597,8 +1601,7 @@ class Synth:
         """A control in the page changed a setting by hand: remember it, so lead.cutoff reads what the dial says."""
         try:
             if _key(name) == "voice":
-                choices = ["none"] + list(_VOICES["rows"])
-                self._wear(choices[int(value)] if _is_number(value) and 0 <= value < len(choices) else value, send=False)
+                self._wear(value, send=False)
             else:
                 _patch_of({self._name(name): value}, "set", False, self._patch)
         except (ValueError, TypeError):
