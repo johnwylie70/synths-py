@@ -118,6 +118,39 @@ def test_the_same_program_writes_the_same_commands_as_synths_js(sent, tmp_path):
     held.order = "together"
     lead.arp(["C4", "E4", "G4"], 1, style="slide", pattern="1 - 3 2 _ 1 3 5^")
     play_arp("Cm7", speed=30, order="down")
+    lead.play("A4", 1, bend="scoop")
+    lead.play("C5", 1, glide="sixteenth")
+    lead.play("E5", 2, vibrato=True, glide=True)
+    lead.play("A3", 1, bend="fall")
+    lead.play("C4", 1, slide=12)
+    lead.play("C4", 1, bend={"to": "E4", "over": "eighth"}, vibrato={"depth": 0.5, "rate": 5, "delay": "quarter"})
+    lead.play("C4", 1, slide={"to": -3, "over": 0.5})
+    moved = lead.start("C4", bend="dip")
+    moved.vibrato()
+    moved.vibrato({"depth": 1})
+    moved.vibrato(False)
+    play_note("A4", 1, bend={"shape": "scoop", "to": -5})
+    lead.arp_pattern = "trance"
+    lead.arp_pattern = [1, 0, 3, 2]
+    lead.arp("Cm7", pattern="off")
+    lead.arp("Cm7", pattern=[1, None, "3^"])
+    lead.arp_pattern = "off"
+    gated = make_synth("pad", echo=0.3)
+    gated.trance_gate = "x.x.xx.x"
+    gated.trance_gate = "pump"
+    gated.trance_gate = [1, 0, 0.5, 0.25]
+    gated.set(trance_gate="X. x.", cutoff=900)
+    gated.set_trance_gate("x.x.xx.x", rate="eighth", depth=0.8, smooth=0.02)
+    gated.trance_gate_swing = 0.2
+    gated.trance_gate = None
+    set_effects(reverb_level=0.8, echo_level=0.7)
+    song.channel(0).volume = 0.6
+    song.channel(0).pan = -0.5
+    song.channel(3).reverb = 0.4
+    song.channel(3).echo = 0.3
+    song.loop([1, 0], [5, 0])
+    song.loop(2, [4])
+    song.loop(None)
     stop_microphone()
 
     def same(c):

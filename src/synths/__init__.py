@@ -241,8 +241,10 @@ _NAMES = json.loads(r'''
   {"id": 225, "name": "reverb.level", "kind": "float", "min": 0, "max": 2, "default": 1, "unit": "gain", "scope": "all"},
   {"id": 226, "name": "delay.level", "kind": "float", "min": 0, "max": 2, "default": 1, "unit": "gain", "scope": "all"}
  ],
- "names": {"wave": {"setting": "osc1.wave", "scale": 1}, "level1": {"setting": "osc1.level", "scale": 1}, "width": {"setting": "osc1.pulse_width", "scale": 1}, "pulseWidth": {"setting": "osc1.pulse_width", "scale": 1}, "sample": {"setting": "osc1.sample", "scale": 1}, "octave": {"setting": "transpose", "scale": 12}, "pitch": {"setting": "transpose", "scale": 1}, "maxVoices": {"setting": "voices", "scale": 1}, "voices": {"setting": "unison.voices", "scale": 1}, "detune": {"setting": "unison.detune", "scale": 1}, "spread": {"setting": "unison.spread", "scale": 1}, "wave2": {"setting": "osc2.wave", "scale": 1}, "level2": {"setting": "osc2.level", "scale": 1}, "pitch2": {"setting": "osc2.coarse", "scale": 1}, "detune2": {"setting": "osc2.fine", "scale": 1}, "width2": {"setting": "osc2.pulse_width", "scale": 1}, "sync": {"setting": "osc2.sync", "scale": 1}, "ring": {"setting": "osc2.ring", "scale": 1}, "sub": {"setting": "sub.level", "scale": 1}, "noise": {"setting": "noise.level", "scale": 1}, "macroRate": {"setting": "macro.rate", "scale": 1}, "macroSync": {"setting": "macro.sync", "scale": 1}, "filter": {"setting": "filter.type", "scale": 1}, "slope": {"setting": "filter.slope", "scale": 1}, "cutoff": {"setting": "filter.cutoff", "scale": 1}, "resonance": {"setting": "filter.resonance", "scale": 1}, "keytrack": {"setting": "filter.keytrack", "scale": 1}, "sweep": {"setting": "filter.env", "scale": 1}, "sweepAttack": {"setting": "filter_env.attack", "scale": 1}, "sweepDecay": {"setting": "filter_env.decay", "scale": 1}, "sweepSustain": {"setting": "filter_env.sustain", "scale": 1}, "sweepRelease": {"setting": "filter_env.release", "scale": 1}, "attack": {"setting": "amp.attack", "scale": 1}, "decay": {"setting": "amp.decay", "scale": 1}, "sustain": {"setting": "amp.sustain", "scale": 1}, "release": {"setting": "amp.release", "scale": 1}, "curve": {"setting": "amp.curve", "scale": 1}, "pitchSweep": {"setting": "mod_env.pitch", "scale": 1}, "pitchSweepAttack": {"setting": "mod_env.attack", "scale": 1}, "pitchSweepDecay": {"setting": "mod_env.decay", "scale": 1}, "vibrato": {"setting": "lfo1.pitch", "scale": 1}, "vibratoRate": {"setting": "lfo1.rate", "scale": 1}, "vibratoDelay": {"setting": "lfo1.delay", "scale": 1}, "tremolo": {"setting": "lfo1.amp", "scale": 1}, "wobble": {"setting": "lfo2.cutoff", "scale": 1}, "wobbleRate": {"setting": "lfo2.rate", "scale": 1}, "autopan": {"setting": "lfo2.pan", "scale": 1}, "pwm": {"setting": "lfo2.pulse_width", "scale": 1}, "pwmRate": {"setting": "lfo2.rate", "scale": 1}, "distortion": {"setting": "fx.drive", "scale": 1}, "drive": {"setting": "fx.drive", "scale": 1}, "crush": {"setting": "fx.bits", "scale": 1}, "bits": {"setting": "fx.bits", "scale": 1}, "downsample": {"setting": "fx.downsample", "scale": 1}, "pitchShift": {"setting": "fx.pitch", "scale": 1}, "ringMod": {"setting": "fx.ring", "scale": 1}, "ringSpeed": {"setting": "fx.ring_freq", "scale": 1}, "ringWave": {"setting": "fx.ring_wave", "scale": 1}, "comb": {"setting": "fx.comb", "scale": 1}, "combTone": {"setting": "fx.comb_freq", "scale": 1}, "combFeedback": {"setting": "fx.comb_feedback", "scale": 1}, "flanger": {"setting": "fx.comb_depth", "scale": 1}, "flangerRate": {"setting": "fx.comb_rate", "scale": 1}, "reverse": {"setting": "osc1.reverse", "scale": 1}, "echo": {"setting": "send.delay", "scale": 1}, "delay": {"setting": "send.delay", "scale": 1}, "reverb": {"setting": "send.reverb", "scale": 1}, "chorus": {"setting": "send.chorus", "scale": 1}, "masterVolume": {"setting": "master.volume", "scale": 1}, "limiter": {"setting": "master.limiter", "scale": 1}, "echoTime": {"setting": "delay.time", "scale": 1}, "echoFeedback": {"setting": "delay.feedback", "scale": 1}, "echoTone": {"setting": "delay.tone", "scale": 1}, "echoBounce": {"setting": "delay.pingpong", "scale": 1}, "reverbSize": {"setting": "reverb.size", "scale": 1}, "reverbDamping": {"setting": "reverb.damping", "scale": 1}, "reverbType": {"setting": "reverb.type", "scale": 1}, "reverbDecay": {"setting": "reverb.decay", "scale": 1}, "reverbPredelay": {"setting": "reverb.predelay", "scale": 1}, "reverbLowCut": {"setting": "reverb.low_cut", "scale": 1}, "chorusRate": {"setting": "chorus.rate", "scale": 1}, "chorusDepth": {"setting": "chorus.depth", "scale": 1}, "micGain": {"setting": "input.gain", "scale": 1}, "micGate": {"setting": "input.gate", "scale": 1}, "micGateRelease": {"setting": "input.gate_release", "scale": 1}},
- "arp": {"words": ["speed", "step", "order", "style", "gate", "octaves", "swing", "accent", "pattern"], "styles": ["slide", "strike"], "patterns": ["bounce", "octaves", "root-fifth", "thumb", "converge", "diverge", "offbeat", "gallop", "trance", "acid"], "fields": ["offsets", "rate", "beats", "order", "octaves", "gate", "style", "swing", "accent", "pattern"]},
+ "names": {"wave": {"setting": "osc1.wave", "scale": 1}, "level1": {"setting": "osc1.level", "scale": 1}, "width": {"setting": "osc1.pulse_width", "scale": 1}, "pulseWidth": {"setting": "osc1.pulse_width", "scale": 1}, "sample": {"setting": "osc1.sample", "scale": 1}, "octave": {"setting": "transpose", "scale": 12}, "pitch": {"setting": "transpose", "scale": 1}, "maxVoices": {"setting": "voices", "scale": 1}, "voices": {"setting": "unison.voices", "scale": 1}, "detune": {"setting": "unison.detune", "scale": 1}, "spread": {"setting": "unison.spread", "scale": 1}, "wave2": {"setting": "osc2.wave", "scale": 1}, "level2": {"setting": "osc2.level", "scale": 1}, "pitch2": {"setting": "osc2.coarse", "scale": 1}, "detune2": {"setting": "osc2.fine", "scale": 1}, "width2": {"setting": "osc2.pulse_width", "scale": 1}, "sync": {"setting": "osc2.sync", "scale": 1}, "ring": {"setting": "osc2.ring", "scale": 1}, "sub": {"setting": "sub.level", "scale": 1}, "noise": {"setting": "noise.level", "scale": 1}, "macroRate": {"setting": "macro.rate", "scale": 1}, "macroSync": {"setting": "macro.sync", "scale": 1}, "filter": {"setting": "filter.type", "scale": 1}, "slope": {"setting": "filter.slope", "scale": 1}, "cutoff": {"setting": "filter.cutoff", "scale": 1}, "resonance": {"setting": "filter.resonance", "scale": 1}, "keytrack": {"setting": "filter.keytrack", "scale": 1}, "sweep": {"setting": "filter.env", "scale": 1}, "sweepAttack": {"setting": "filter_env.attack", "scale": 1}, "sweepDecay": {"setting": "filter_env.decay", "scale": 1}, "sweepSustain": {"setting": "filter_env.sustain", "scale": 1}, "sweepRelease": {"setting": "filter_env.release", "scale": 1}, "attack": {"setting": "amp.attack", "scale": 1}, "decay": {"setting": "amp.decay", "scale": 1}, "sustain": {"setting": "amp.sustain", "scale": 1}, "release": {"setting": "amp.release", "scale": 1}, "curve": {"setting": "amp.curve", "scale": 1}, "pitchSweep": {"setting": "mod_env.pitch", "scale": 1}, "pitchSweepAttack": {"setting": "mod_env.attack", "scale": 1}, "pitchSweepDecay": {"setting": "mod_env.decay", "scale": 1}, "vibrato": {"setting": "lfo1.pitch", "scale": 1}, "vibratoRate": {"setting": "lfo1.rate", "scale": 1}, "vibratoDelay": {"setting": "lfo1.delay", "scale": 1}, "tremolo": {"setting": "lfo1.amp", "scale": 1}, "wobble": {"setting": "lfo2.cutoff", "scale": 1}, "wobbleRate": {"setting": "lfo2.rate", "scale": 1}, "autopan": {"setting": "lfo2.pan", "scale": 1}, "pwm": {"setting": "lfo2.pulse_width", "scale": 1}, "pwmRate": {"setting": "lfo2.rate", "scale": 1}, "distortion": {"setting": "fx.drive", "scale": 1}, "drive": {"setting": "fx.drive", "scale": 1}, "crush": {"setting": "fx.bits", "scale": 1}, "bits": {"setting": "fx.bits", "scale": 1}, "downsample": {"setting": "fx.downsample", "scale": 1}, "pitchShift": {"setting": "fx.pitch", "scale": 1}, "ringMod": {"setting": "fx.ring", "scale": 1}, "ringSpeed": {"setting": "fx.ring_freq", "scale": 1}, "ringWave": {"setting": "fx.ring_wave", "scale": 1}, "comb": {"setting": "fx.comb", "scale": 1}, "combTone": {"setting": "fx.comb_freq", "scale": 1}, "combFeedback": {"setting": "fx.comb_feedback", "scale": 1}, "flanger": {"setting": "fx.comb_depth", "scale": 1}, "flangerRate": {"setting": "fx.comb_rate", "scale": 1}, "reverse": {"setting": "osc1.reverse", "scale": 1}, "echo": {"setting": "send.delay", "scale": 1}, "delay": {"setting": "send.delay", "scale": 1}, "reverb": {"setting": "send.reverb", "scale": 1}, "chorus": {"setting": "send.chorus", "scale": 1}, "masterVolume": {"setting": "master.volume", "scale": 1}, "limiter": {"setting": "master.limiter", "scale": 1}, "echoTime": {"setting": "delay.time", "scale": 1}, "echoFeedback": {"setting": "delay.feedback", "scale": 1}, "echoTone": {"setting": "delay.tone", "scale": 1}, "echoBounce": {"setting": "delay.pingpong", "scale": 1}, "reverbSize": {"setting": "reverb.size", "scale": 1}, "reverbDamping": {"setting": "reverb.damping", "scale": 1}, "reverbType": {"setting": "reverb.type", "scale": 1}, "reverbDecay": {"setting": "reverb.decay", "scale": 1}, "reverbPredelay": {"setting": "reverb.predelay", "scale": 1}, "reverbLowCut": {"setting": "reverb.low_cut", "scale": 1}, "reverbLevel": {"setting": "reverb.level", "scale": 1}, "echoLevel": {"setting": "delay.level", "scale": 1}, "tranceGateDepth": {"setting": "gate.depth", "scale": 1}, "tranceGateRate": {"setting": "gate.rate", "scale": 1}, "tranceGateSmooth": {"setting": "gate.smooth", "scale": 1}, "tranceGateSwing": {"setting": "gate.swing", "scale": 1}, "tranceGateSends": {"setting": "gate.sends", "scale": 1}, "tranceGateStereo": {"setting": "gate.stereo", "scale": 1}, "chorusRate": {"setting": "chorus.rate", "scale": 1}, "chorusDepth": {"setting": "chorus.depth", "scale": 1}, "micGain": {"setting": "input.gain", "scale": 1}, "micGate": {"setting": "input.gate", "scale": 1}, "micGateRelease": {"setting": "input.gate_release", "scale": 1}},
+ "moves": {"words": ["glide", "bend", "slide", "vibrato"], "shapes": ["scoop", "fall", "dip"], "bend": ["to", "over", "shape"], "vibrato": ["depth", "rate", "delay"]},
+ "arp": {"words": ["speed", "step", "order", "style", "gate", "octaves", "swing", "accent", "pattern"], "styles": ["slide", "strike"], "patterns": ["bounce", "octaves", "root-fifth", "thumb", "converge", "diverge", "offbeat", "gallop", "trance", "acid"], "patternSteps": {"bounce": "1 2 3 2", "octaves": "1 1' 1 1'", "root-fifth": "1 3 1' 3", "thumb": "1 2 1 3 1 4 1 3", "converge": "1 4 2 3", "diverge": "2 3 1 4", "offbeat": "- 1 - 2 - 3 - 2", "gallop": "1^ - 1 1 2^ - 2 2", "trance": "1^ - 3 2 - 1^ 3 -", "acid": "1^ 1 ~3 - 1' ~1 2^ -"}, "setting": "arpPattern", "step": "arpStep", "fields": ["offsets", "rate", "beats", "order", "octaves", "gate", "style", "swing", "accent", "pattern"]},
+ "tranceGate": {"functions": ["setTranceGate", "tranceGateStep"], "patterns": {"eighths": "x.x.x.x.x.x.x.x.", "offbeat": "..x...x...x...x.", "gallop": "x.xxx.xxx.xxx.xx", "trance": "x.x.xx.xx.x.xx.x", "stutter": "xxx.xx.xx.xxx.x.", "pump": "2468246824682468", "triplets": "x..x..x..x..x..x..x..x..", "dotted": "x..x..x.x..x..x."}, "setting": "tranceGate", "settings": ["tranceGateDepth", "tranceGateRate", "tranceGateSmooth", "tranceGateSwing", "tranceGateSends", "tranceGateStereo"], "words": ["rate", "depth", "smooth", "swing", "stereo", "sends"], "step": "tranceGateStep"},
  "choiceWords": {"square": "pulse", "sawtooth": "saw", "tri": "triangle", "sin": "sine", "low": "lowpass", "high": "highpass", "band": "bandpass", "none": "off", "hiss": "white", "chip": "lfsr", "buzz": "lfsr_short"},
  "plain": {"filter": "lowpass", "cutoff": 20000, "resonance": 0.1},
  "synths": {
@@ -292,7 +294,7 @@ _NAMES = json.loads(r'''
  "voices": {"robot": {"help": "A machine: the voice multiplied by a 50 Hz wave, ringing in a metal pipe.", "values": {"fx.ring": 1, "fx.ring_freq": 50, "fx.comb": 0.45, "fx.comb_freq": 110, "fx.comb_feedback": 0.8, "fx.bits": 10}}, "chipmunk": {"help": "Small and squeaky: everything seven semitones higher.", "values": {"fx.pitch": 7}}, "monster": {"help": "Huge and deep: seven semitones lower, with a growl and a little room.", "values": {"fx.pitch": -7, "fx.drive": 0.25, "send.reverb": 0.3, "reverb.size": 0.7, "reverb.damping": 0.6}}, "cave": {"help": "Far inside a cave: long echoes and an enormous, dark space.", "values": {"send.delay": 0.5, "send.reverb": 0.6, "delay.time": 0.38, "delay.feedback": 0.55, "delay.tone": 2500, "reverb.type": 3, "reverb.size": 0.4, "reverb.damping": 0.55}}, "telephone": {"help": "Down an old phone line: only the middle of the voice, coarse and a little crushed.", "values": {"filter.type": 3, "filter.slope": 1, "filter.cutoff": 1200, "filter.resonance": 0.2, "fx.drive": 0.2, "fx.bits": 8, "fx.downsample": 6}}, "alien": {"help": "Not from here: higher, multiplied by a 180 Hz wave, with a slow metallic sweep.", "values": {"fx.pitch": 4, "fx.ring": 0.8, "fx.ring_freq": 180, "fx.comb": 0.4, "fx.comb_freq": 600, "fx.comb_feedback": 0.75, "fx.comb_rate": 0.4, "fx.comb_depth": 0.5, "send.chorus": 0.4}}, "whisper": {"help": "Hoarse and breathy: the voice's pitch blurred into noise, with its low end taken off.", "values": {"filter.type": 2, "filter.cutoff": 500, "filter.resonance": 0, "fx.ring": 1, "fx.ring_wave": 1, "fx.ring_freq": 350}}},
  "buffer": {"functions": ["setSoundBuffer", "soundBuffer"], "words": {"small": 1024, "medium": 2048, "large": 4096, "auto": "auto"}, "least": 256, "most": 16384, "event": "buffer", "reads": ["frames", "delay", "thread", "underruns", "setting"], "threads": ["audio", "page"]},
  "zones": {"functions": ["loadSamples"], "synthFunctions": ["setSamples", "zones"], "words": ["file", "note", "from", "to", "loud", "tune", "volume", "pan", "release", "loop", "oneShot", "asRecorded", "start"], "options": ["kit", "crossfade", "loop", "oneShot"], "most": 512, "layers": 4},
- "song": {"does": ["play", "resume", "pause", "stop", "seek", "volume", "repeat", "mute", "solo", "loopPattern", "replace"], "functions": ["stop", "pause", "resume", "seek", "mute", "unmute", "solo", "loopPattern", "replace"]},
+ "song": {"does": ["play", "resume", "pause", "stop", "seek", "volume", "repeat", "mute", "solo", "loopPattern", "replace", "mix", "loop"], "functions": ["stop", "pause", "resume", "seek", "mute", "unmute", "solo", "loopPattern", "replace", "loop", "channel"], "channel": {"reads": ["samples", "level", "notes"], "sets": {"volume": [0, 2], "pan": [-1, 1], "reverb": [0, 1], "echo": [0, 1]}}, "keys": ["mixer", "effects", "loop"]},
  "microphone": {"names": {"pitch": "pitchShift", "ring": "ringMod", "gain": "micGain", "gate": "micGate", "gaterelease": "micGateRelease"}, "gate": -50, "states": ["asking", "on", "refused", "none", "busy", "unavailable", "off"], "functions": ["useMicrophone", "stopMicrophone", "recordSound", "startRecording", "stopRecording", "recordOutput", "saveSound", "receiveSoundEvents", "voiceNames"], "micFunctions": ["listen", "mute", "record", "whenReady", "close"], "takeFunctions": ["onDone", "whenDone", "stopRecording"], "events": ["microphone", "recorded", "saved"], "longestRecording": 120, "usualRecording": 30}
 }
 ''')
@@ -651,6 +653,120 @@ def _chord_of(chord, kind, said):
     return notes
 
 
+# ---------------------------------------------------------------- patterns, and notes whose pitch moves
+
+_NO_PATTERN = ("", "off", "none")
+_PATTERN_WORDS = {"arppattern": "arpPattern", "trancegate": "tranceGate"}
+
+
+def _pattern_word(name):
+    """Is this the name of a pattern setting (arp_pattern, arpPattern, trance_gate, tranceGate)? The name it is sent by."""
+    return _PATTERN_WORDS.get(_key(name)) if isinstance(name, str) else None
+
+
+def _arp_pattern_text(given, said="arp_pattern"):
+    """A PATTERN AS TEXT, which is how it is kept, sent and read back, from what was given: the text itself, the name
+    of a built-in one, or a list of steps. None (and "off", "none", "", False) is no pattern. An arpeggio's steps
+    have spaces between them ("1 - 3 2 _ 1 3 5^"); in a list a step is that text or a number, and 0 or None a rest."""
+    if given is None or given is False:
+        return None
+    if isinstance(given, (list, tuple)):
+        given = " ".join("-" if step is None or (_is_number(step) and step == 0) else
+                         str(int(step) if _is_number(step) and step == int(step) else step).strip() for step in given)
+    text = " ".join(given.split()) if isinstance(given, str) else None
+    names = _NAMES["arp"]["patternSteps"]
+    if text is not None and text.lower() in _NO_PATTERN:
+        return None
+    if text is not None and text.lower() in names:
+        return names[text.lower()]
+    steps = [] if text is None else text.split(" ")
+    if not steps or len(steps) > 32 or not all(_ARP_STEP.match(t) for t in steps):
+        raise ValueError("%s: a pattern is up to 32 steps with spaces between them, as in \"1 - 3 2 _ 1 3 5^\" (a number is that "
+                         "note of the chord, - a rest, _ holds the last note, ' an octave up, ^ an accent), a list of them, or "
+                         "one by name: %s; not %s" % (said, ", ".join(names), _shown(given)))
+    return text
+
+
+def _gate_pattern_text(given, said="trance_gate"):
+    """The trance gate's pattern as text: one character a step ("x.x.xx.x": x open, . closed, 0 to 9 a level between),
+    from that text, a list of levels from 0 to 1, or a name. None (and "off", "none", "", False) is no pattern."""
+    if given is None or given is False:
+        return None
+    if isinstance(given, (list, tuple)) and all(_is_number(v) and 0 <= v <= 1 for v in given):
+        given = "".join("x" if v >= 1 else "." if v <= 0 else str(int(math.floor(v * 9 + 0.5))) for v in given)
+    text = "".join(given.split()) if isinstance(given, str) else None
+    names = _NAMES["tranceGate"]["patterns"]
+    if text is not None and text.lower() in _NO_PATTERN:
+        return None
+    if text is not None and text.lower() in names:
+        return names[text.lower()]
+    if text is None or len(text) > 32 or not re.match(r"^[xX.0-9]+$", text):
+        raise ValueError("%s: a trance gate's pattern is up to 32 steps, one character each, as in \"x.x.xx.x\" (x is open, . is "
+                         "closed, 0 to 9 a level between), a list of levels from 0 to 1, or one by name: %s; not %s"
+                         % (said, ", ".join(names), _shown(given)))
+    return text.lower()
+
+
+def _describe_pattern(which, text):
+    """What a control is told a pattern is: its text now, the built-in ones by name, and the name of this one if it is one."""
+    table = _NAMES["arp"]["patternSteps"] if which == "arpPattern" else _NAMES["tranceGate"]["patterns"]
+    d = {"name": _snake(which), "kind": "pattern", "default": "", "value": text or "", "steps": 32, "patterns": dict(table)}
+    named = [name for name, steps in table.items() if text and steps == text]
+    if named:
+        d["named"] = named[0]
+    return d
+
+
+def _moves_of(s, o, said, note=None):
+    """HOW A NOTE'S PITCH MOVES, as a note command carries it (synths.js: movesOf), from what play() and start() were told:
+      glide    the note slides to its pitch from the synth's last note: True (a sixteenth), seconds, or a note length
+      bend     "scoop" (up into the note), "fall" (drooping away at its end), "dip" (down and back), or
+               {"to": semitones or a note, "over": seconds or a note length, "shape"}
+      slide    a bend by so many semitones over a sixteenth: 12, or {"to", "over"}
+      vibrato  True, or {"depth": semitones each way (0.3), "rate": times a second (6), "delay": before it begins ("eighth")}"""
+    out = {}
+
+    def time(value, what, usual):
+        if value is None or value is True:
+            return s.length(usual, what)
+        return s.length(value, what) if isinstance(value, str) else _amount(value, what, 0, 60)
+    glide, bend, slide, vibrato = o.get("glide"), o.get("bend"), o.get("slide"), o.get("vibrato")
+    if glide is not None and glide is not False:
+        out["glide"] = time(glide, "%s: glide" % said, "sixteenth")
+    if bend is not None and slide is not None:
+        raise ValueError("%s: a note has a bend or a slide, not both" % said)
+    given = bend if bend is not None else {"to": slide, "over": "sixteenth"} if _is_number(slide) else slide
+    if given is not None and given is not False:
+        b = {"shape": given} if isinstance(given, str) else given
+        shapes = _NAMES["moves"]["shapes"]
+        if not isinstance(b, dict) or not b or (b.get("shape") is not None and b["shape"] not in shapes) or (b.get("shape") is None and b.get("to") is None):
+            raise ValueError('%s: %s how far and how long, as in {"to": 2, "over": "eighth"}, not %s'
+                             % (said, 'bend is "scoop", "fall", "dip", or' if bend is not None else "slide is a number of semitones, or", _shown(given)))
+        made = {}
+        if b.get("shape"):
+            made["shape"] = b["shape"]
+        if b.get("to") is not None:
+            if isinstance(b["to"], str):          # a note by name is that far from the note being played
+                start = None if note is None else _notes_of(note)
+                if not start or len(start) != 1:
+                    raise ValueError("%s: a bend to a note by name needs one note to bend from" % said)
+                made["to"] = note_number(b["to"]) - start[0]
+            else:
+                made["to"] = _amount(b["to"], "%s: bend to" % said, -96, 96)
+        made["over"] = time(b.get("over"), "%s: over" % said, "sixteenth" if b.get("shape") == "scoop" or bend is None else "eighth")
+        out["bend"] = made
+    if vibrato is not None and vibrato is not False:
+        v = {} if vibrato is True else vibrato
+        if not isinstance(v, dict):
+            raise ValueError('%s: vibrato is True, or its depth, rate and delay, as in {"depth": 0.5, "rate": 5}, not %s' % (said, _shown(vibrato)))
+        delay = v.get("delay")
+        out["vibrato"] = {"depth": 0.3 if v.get("depth") is None else _amount(v["depth"], "%s: vibrato depth" % said, 0, 12),
+                          "rate": 6 if v.get("rate") is None else _amount(v["rate"], "%s: vibrato rate" % said, 0.1, 40),
+                          "delay": s.length("eighth", said) if delay is None else s.length(delay, "%s: vibrato delay" % said)
+                          if isinstance(delay, str) else _amount(delay, "%s: vibrato delay" % said, 0, 60)}
+    return out
+
+
 # What an arpeggio may be told (synths.js: ARP_WORDS), kept between changes of its chord; and a step of a pattern written out.
 _ARP_WORDS = ("speed", "step", "rate", "order", "style", "gate", "octaves", "swing", "accent", "accents", "pattern")
 _ARP_STEP = re.compile(r"^(?:~?\d{1,2}[',]*\^?(?::\d)?|[-._])$")
@@ -696,14 +812,8 @@ def _arp_of(notes, root, o, said):
                              "accent=[1, 0.5, 0.5, 0.5], not %s" % (said, _shown(accent)))
         arp["accent"] = list(accent)
     if o.get("pattern") is not None:
-        text = o["pattern"].strip() if isinstance(o["pattern"], str) else ""
-        steps = text.split()
-        patterns = _NAMES["arp"]["patterns"]
-        if not text or (text not in patterns and (len(steps) > 32 or not all(_ARP_STEP.match(t) for t in steps))):
-            raise ValueError("%s: a pattern is steps with spaces between them, as in pattern=\"1 - 3 2 _ 1 3 5^\" (a number is that "
-                             "note of the chord, - a rest, _ holds the last note, ' an octave up, ^ an accent), or one by name: %s; "
-                             "not %s" % (said, ", ".join(patterns), _shown(o["pattern"])))
-        arp["pattern"] = text
+        text = _arp_pattern_text(o["pattern"], "%s: pattern" % said)
+        arp["pattern"] = text or ""           # "off" follows none, whatever the synth's own pattern is
     return arp
 
 
@@ -1126,7 +1236,8 @@ class _Sound:
                     self.mic._said(e)
             elif kind == "reading":
                 self.readings[e.get("id") or ""] = {"samples": list(e.get("samples") or ()), "level": list(e.get("level") or (0, 0)),
-                                                    "notes": list(e.get("notes") or ())}
+                                                    "notes": list(e.get("notes") or ()),
+                                                    "arpStep": e.get("arpStep", -1), "tranceGateStep": e.get("tranceGateStep", -1)}
             elif kind == "position":
                 self.position = {k: e.get(k, v) for k, v in _NO_SONG.items()}
             elif kind == _NAMES["buffer"]["event"]:
@@ -1216,11 +1327,18 @@ class Note:
         s.command(dict({"op": "voice", "id": self._synth, "h": self._h}, t=s.clock(), **change))
         return self
 
-    def stop(self):
-        """Let it go: it dies away over the synth's release."""
+    def stop(self, *, after=None, at=None, beat=None):
+        """Let it go: it dies away over the synth's release. held.stop(at=sound_time() + 1) lets go then."""
         s = self._sound
-        s.command({"op": "off", "id": self._synth, "h": self._h, "t": s.clock()})
+        s.command({"op": "off", "id": self._synth, "h": self._h, "t": s.when("stop", after, at, beat)})
         return self
+
+    def vibrato(self, how=True):
+        """Give the note a vibrato as it sounds: held.vibrato(), held.vibrato({"depth": 0.5, "rate": 5, "delay": 0}),
+        and held.vibrato(False) stops it."""
+        s = self._sound
+        made = False if how is False else _moves_of(s, {"vibrato": {"delay": 0} if how is True else how}, "vibrato")["vibrato"]
+        return self._voice(vibrato=made)
 
     def cut(self):
         """Cut it off at once."""
@@ -1302,6 +1420,7 @@ class Song:
     def __init__(self, sound, id):
         object.__setattr__(self, "_sound", sound)
         object.__setattr__(self, "id", id)
+        object.__setattr__(self, "_mixed", {})
 
     def _do(self, what, **more):
         self._sound.command(dict({"op": "song", "id": self.id, "do": what}, t=self._sound.clock(), **more))
@@ -1371,7 +1490,22 @@ class Song:
         .samples(), .notes(). A frame late in a Pyctures scene, as a synth's are."""
         if not isinstance(n, int) or isinstance(n, bool) or not 0 <= n <= 31:
             raise ValueError("channel needs the number of a channel, counting from 0, not %s" % _shown(n))
-        return _Reading(self._sound, "song:channel:%d" % n)
+        if n not in self._mixed:
+            self._mixed[n] = _Channel(self, n)
+        return self._mixed[n]
+
+    def loop(self, start=None, end=None):
+        """A stretch of the song that goes round: song.loop([2, 0], [4, 0]) plays from the top of place 2 in the order
+        up to the top of place 4 and back, each a place in the order and a row. song.loop(None) lets it run on."""
+        def place(p, said):
+            if p is None or p is False:
+                return None
+            where = [p, 0] if isinstance(p, int) and not isinstance(p, bool) else p
+            whole = lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 0
+            if not isinstance(where, (list, tuple)) or not 1 <= len(where) <= 2 or not all(whole(v) for v in where):
+                raise ValueError("loop: %s is a place in the song's order and a row there, as in song.loop([2, 0], [4, 0]), not %s" % (said, _shown(p)))
+            return [where[0], where[1] if len(where) > 1 else 0]
+        return self._do("loop", start=place(start, "the start"), end=place(end, "the end"))
 
     @property
     def position(self):
@@ -1389,6 +1523,39 @@ class Song:
             self._do("repeat", repeat=bool(value))
         else:
             object.__setattr__(self, name, value)
+
+
+class _Channel:
+    """One channel of a song: what it is doing, to read (samples(), level(), notes()), and its place in the song's
+    mix, to move while the song plays: channel.volume = 0.6 (0 to 2), .pan (-1 to 1), .reverb and .echo (0 to 1).
+    Each reads back what was last set here, and None until then: what the song itself says is the song's to know."""
+
+    def __init__(self, song, n):
+        object.__setattr__(self, "_song", song)
+        object.__setattr__(self, "_n", n)
+        object.__setattr__(self, "_now", {})
+        object.__setattr__(self, "_read", _Reading(song._sound, "song:channel:%d" % n))
+
+    def samples(self):
+        return self._read.samples()
+
+    def level(self):
+        return self._read.level()
+
+    def notes(self):
+        return self._read.notes()
+
+    def __getattr__(self, name):
+        if name in _NAMES["song"]["channel"]["sets"]:
+            return self._now.get(name)
+        raise AttributeError(name)
+
+    def __setattr__(self, name, value):
+        sets = _NAMES["song"]["channel"]["sets"]
+        if name not in sets:
+            raise AttributeError("A song's channel has volume, pan, reverb and echo to set, not %s" % _shown(name))
+        self._now[name] = _amount(value, "channel(%d).%s" % (self._n, name), sets[name][0], sets[name][1])
+        self._song._do("mix", channel=self._n, **{name: self._now[name]})
 
 
 class _Reading:
@@ -1428,6 +1595,7 @@ class Synth:
         put(self, "_plain", None)        # what the voice settings were before sound_like() first changed them
         put(self, "_loop", False)
         put(self, "_zones", None)        # the `zones` command of its sample map, if it has one
+        put(self, "_patterns", {})       # arpPattern and tranceGate, each as its text
 
     # What is this object's own and not a setting of the engine.
     _OWN = ("voice", "loop")
@@ -1442,6 +1610,8 @@ class Synth:
             raise AttributeError(name)
         if name == "macro":
             return self._macro
+        if _pattern_word(name):
+            return self._patterns.get(_pattern_word(name), "")
         entry = _setting(self._name(name))
         if entry is None:
             raise AttributeError("A synth has no setting called %s.%s" % (_shown(name), _meant(name, _SHOWN)))
@@ -1460,6 +1630,8 @@ class Synth:
             object.__setattr__(self, name, value)
         elif name == "macro":
             self.set_macro(value)
+        elif _pattern_word(name):
+            self._pattern(_pattern_word(name), value, self._sound.clock())
         elif name == "samples":
             self.set_samples(value)      # lead.samples = {"C3": "a.wav"}; lead.samples() is still the wave for a scope
         elif _setting(self._name(name)) is not None:
@@ -1475,9 +1647,13 @@ class Synth:
         return "<synth %s>" % self._id
 
     # --- notes
-    def play(self, note=None, length=None, volume=None, *, pan=None, after=None, at=None, beat=None):
-        """A note for a while: lead.play("E4", 0.5). A list of notes is a chord. No note: the synth's own (a drum's)."""
+    def play(self, note=None, length=None, volume=None, *, pan=None, glide=None, bend=None, slide=None, vibrato=None,
+             after=None, at=None, beat=None):
+        """A note for a while: lead.play("E4", 0.5). A list of notes is a chord. No note: the synth's own (a drum's).
+        Its pitch can move: glide=True slides to it from the synth's last note, bend="scoop" (or "fall", "dip",
+        {"to": 2, "over": "eighth"}), slide=12, vibrato=True."""
         s = self._sound
+        moves = _moves_of(s, {"glide": glide, "bend": bend, "slide": slide, "vibrato": vibrato}, "play", note)
         c = {"op": "note", "id": self._id, "note": None if note is None else _notes_of(note),
              "len": self._length if length is None else s.length(length, "play: the length"),
              "t": s.when("play", after, at, beat)}
@@ -1485,12 +1661,16 @@ class Synth:
             c["vel"] = _amount(volume, "play: volume")
         if pan is not None:
             c["pan"] = _amount(pan, "play: pan", -1, 1)
+        c.update(moves)
         s.command(c)
         return self
 
-    def start(self, note=None, volume=None, *, pan=None, after=None, at=None, beat=None):
-        """Start a note that stays until it is stopped: held = lead.start("C4"), then held.stop()."""
+    def start(self, note=None, volume=None, *, pan=None, glide=None, bend=None, slide=None, vibrato=None,
+              after=None, at=None, beat=None):
+        """Start a note that stays until it is stopped: held = lead.start("C4"), then held.stop(). Its pitch can move
+        as play()'s can (glide, bend, slide, vibrato), and afterwards: held.slide_to("E4", 0.2), held.vibrato()."""
         s = self._sound
+        moves = _moves_of(s, {"glide": glide, "bend": bend, "slide": slide, "vibrato": vibrato}, "start", note)
         s.handles = 1 if s.handles >= 0x7FFFFFF0 else s.handles + 1
         c = {"op": "note", "id": self._id, "note": None if note is None else _notes_of(note), "len": None,
              "h": s.handles, "t": s.when("start", after, at, beat)}
@@ -1498,6 +1678,7 @@ class Synth:
             c["vel"] = _amount(volume, "start: volume")
         if pan is not None:
             c["pan"] = _amount(pan, "start: pan", -1, 1)
+        c.update(moves)
         s.command(c)
         return Note(s, self._id, s.handles)
 
@@ -1555,15 +1736,17 @@ class Synth:
         self._sound.command(c)
         return self
 
-    def note_on(self, note, velocity=0.8):
-        """A key going down: the note stays until note_off(note). What a keyboard calls."""
+    def note_on(self, note, velocity=0.8, *, at=None):
+        """A key going down: the note stays until note_off(note). What a keyboard calls. at= is a time of
+        sound_time(): the key goes down on that exact sample, for a sequencer of your own that looks ahead."""
         s = self._sound
         s.command({"op": "note", "id": self._id, "note": _note_numbers(note), "len": None,
-                   "vel": _amount(velocity, "note_on: velocity"), "t": s.clock()})
+                   "vel": _amount(velocity, "note_on: velocity"), "t": s.when("note_on", None, at, None)})
 
-    def note_off(self, note):
-        """A key coming up."""
-        self.stop(note)
+    def note_off(self, note, *, at=None):
+        """A key coming up; at= a time of sound_time()."""
+        s = self._sound
+        s.command({"op": "off", "id": self._id, "note": _note_numbers(note), "t": s.when("note_off", None, at, None)})
 
     def play_notes(self, notes, step=None, *, repeat=None, volume=None, hold=None, after=None, at=None, beat=None):
         """A tune on this synth: lead.play_notes("C4 E4 G4 - C5", 0.25, repeat=True)."""
@@ -1659,12 +1842,61 @@ class Synth:
         for name, value in given.items():
             if _key(name) == "voice":
                 self._wear(value, at)
+            elif _pattern_word(name):
+                self._pattern(_pattern_word(name), value, at)
             else:
                 out[self._name(name)] = value
         return _with_samples(self._sound, out, self._patch, "set")
 
+    # --- patterns
+    def _pattern(self, which, pattern, at):
+        """PATTERNS. lead.arp_pattern = "1 - 3 2 _ 1 3 5^" (or "trance", or a list of steps) is the rhythm every
+        arpeggio of this synth follows unless it says another, the one that is sounding from its next step.
+        pad.trance_gate = "x.x.xx.x" is the trance gate: the synth's sound turned up and down in that pattern of steps,
+        in time with the tempo, so a held chord becomes a rhythm. Each reads back as its text, "" for none, and None
+        or "off" takes it away."""
+        text = (_arp_pattern_text if which == "arpPattern" else _gate_pattern_text)(pattern, _snake(which))
+        self._patterns[which] = text or ""
+        # The gate opens and closes all the way unless its depth says otherwise, as the player will make it.
+        if which == "tranceGate":
+            depth = _setting("gate.depth")
+            if depth and text and not self._patch.get(depth["id"]):
+                self._patch[depth["id"]] = 1
+            elif depth and not text:
+                self._patch[depth["id"]] = 0
+        self._sound.command({"op": "set", "id": self._id, which: text or "", "t": at})
+
+    def set_trance_gate(self, pattern="eighths", **how):
+        """The trance gate and its settings in one line: pad.set_trance_gate("x.x.xx.x", rate="eighth", depth=0.8,
+        smooth=0.02). A rate may be a note length. The steps begin at set_tempo."""
+        words = _NAMES["tranceGate"]["words"]
+        given = {}
+        for word, value in how.items():
+            if word not in words:
+                raise ValueError("set_trance_gate: there is no %s to say here.%s It may be: %s" % (_shown(word), _meant(word, words), ", ".join(words)))
+            given["gate." + word] = 1 / _beats_long(value, "set_trance_gate: rate") if word == "rate" and isinstance(value, str) else value
+        self._pattern("tranceGate", pattern, self._sound.clock())
+        if given:
+            self.set(given)
+        return self
+
+    def arp_step(self):
+        """Which step of its arpeggio this synth is on now, counted from 0 (within the pattern, if it has one), or -1
+        with none sounding: for drawing it. A frame late in a Pyctures scene, as samples() is."""
+        return self._sound.reading(self._id).get("arpStep", -1)
+
+    def trance_gate_step(self):
+        """Which step of its trance gate this synth is on now, counted from 0, or -1 with no gate. A frame late."""
+        return self._sound.reading(self._id).get("tranceGateStep", -1)
+
     def get(self, name):
         """A setting by its name: lead.get("cutoff") is lead.cutoff."""
+        if _key(name) == "arpstep":
+            return self.arp_step()
+        if _key(name) == "trancegatestep":
+            return self.trance_gate_step()
+        if _pattern_word(name):
+            return self._patterns.get(_pattern_word(name), "")
         return getattr(self, _snake(name) if _key(name) in ("voice", "loop", "listening") else name)
 
     # --- a voice changer
@@ -1766,6 +1998,8 @@ class Synth:
         if _key(name) == "voice":
             return {"name": "voice", "kind": "choice", "min": 0, "max": len(_VOICES["rows"]), "default": "none",
                     "choices": ["none"] + list(_VOICES["rows"])}
+        if _pattern_word(name):
+            return _describe_pattern(_pattern_word(name), self._patterns.get(_pattern_word(name)))
         entry = _setting(self._name(name))
         if entry is None:
             return None
@@ -2117,11 +2351,14 @@ def load_samples(files=None, **settings):
     return synth
 
 
-def play_note(note=None, length=0.5, volume=None, *, pan=None, after=None, at=None, beat=None):
-    """A note on a pleasant synth: play_note("C4"), play_note("C4", 2, 0.3). A list of notes is a chord."""
+def play_note(note=None, length=0.5, volume=None, *, pan=None, glide=None, bend=None, slide=None, vibrato=None,
+              after=None, at=None, beat=None):
+    """A note on a pleasant synth: play_note("C4"), play_note("C4", 2, 0.3). A list of notes is a chord. Its pitch
+    can move, as a synth's play() says: play_note("A4", 1, bend="scoop"), glide=True, slide=12, vibrato=True."""
     if note is None:
         raise ValueError('play_note needs a note, as in play_note("C4")')
-    _sound().main_synth().play(note, length, volume, pan=pan, after=after, at=at, beat=beat)
+    _sound().main_synth().play(note, length, volume, pan=pan, glide=glide, bend=bend, slide=slide, vibrato=vibrato,
+                               after=after, at=at, beat=beat)
 
 
 def play_notes(notes=None, step=None, *, repeat=None, volume=None, hold=None, after=None, at=None, beat=None):

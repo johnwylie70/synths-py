@@ -13,10 +13,12 @@ NOTES = (list, type(None))
 FORMAT = {
     "synth": {"id": str, "preset": str, "set": dict, "macro": (list, dict, type(None))},
     "macro": {"id": str, "macro": (list, dict, type(None))},
-    "set": {"id": str, "set": dict, "glide": NUMBER},
-    "note": {"id": str, "note": NOTES, "len": NUMBER + (type(None),), "vel": NUMBER, "pan": NUMBER, "h": int, "arp": dict},
+    "set": {"id": str, "set": dict, "glide": NUMBER, "arpPattern": str, "tranceGate": str},
+    "note": {"id": str, "note": NOTES, "len": NUMBER + (type(None),), "vel": NUMBER, "pan": NUMBER, "h": int, "arp": dict,
+             "glide": NUMBER, "bend": dict, "vibrato": dict},
     "off": {"id": str, "h": int, "note": list, "cut": bool},
-    "voice": {"id": str, "h": int, "pitch": NUMBER, "freq": NUMBER, "glide": NUMBER, "vol": NUMBER, "pan": NUMBER, "kill": bool, "arp": (dict, type(None))},
+    "voice": {"id": str, "h": int, "pitch": NUMBER, "freq": NUMBER, "glide": NUMBER, "vol": NUMBER, "pan": NUMBER, "kill": bool, "arp": (dict, type(None)),
+              "vibrato": (dict, bool)},
     "sound": {"name": str, "vol": NUMBER, "pitch": NUMBER, "pan": NUMBER, "len": NUMBER},
     "tempo": {"bpm": NUMBER},
     "sample": {"id": str, "url": str, "bytes": str, "note": NUMBER, "loop": (bool, list), "pingpong": bool, "name": str, "zone": bool},
@@ -27,9 +29,10 @@ FORMAT = {
     "buffer": {"size": (int, str)},
     "zones": {"id": str, "zones": (list, type(None)), "kit": bool, "crossfade": NUMBER + (dict,), "oneShot": bool, "release": bool},
     "song": {"id": str, "do": str, "url": str, "bytes": str, "name": str, "repeat": bool, "vol": NUMBER, "raw": bool,
-             "patches": dict, "files": dict, "order": int, "row": int},
+             "patches": dict, "files": dict, "order": int, "row": int, "channel": int, "volume": NUMBER, "pan": NUMBER,
+             "reverb": NUMBER, "echo": NUMBER, "start": (list, type(None)), "end": (list, type(None))},
 }
-NEEDS = {"synth": ["id"], "set": ["id", "set"], "note": ["id"], "off": ["id"], "voice": ["id", "h"], "sound": ["name"],
+NEEDS = {"synth": ["id"], "set": ["id"], "note": ["id"], "off": ["id"], "voice": ["id", "h"], "sound": ["name"],
          "sample": ["id"], "tune": ["id", "synth", "steps"], "free": ["id"], "song": ["do"], "macro": ["id", "macro"], "tempo": ["bpm"]}
 
 
@@ -339,7 +342,7 @@ def test_a_musical_arpeggio_is_counted_in_beats(sent):
     held.change("F", step="eighth", swing=0.2, accent=[1, 0.5, 0, 0.5])      # a step takes the place of the speed
     assert sent[-1]["op"] == "voice" and sent[-1]["arp"] == {"offsets": [-4, 0, 3], "order": 6, "beats": 0.5, "swing": 0.2, "accent": [1, 0.5, 0, 0.5]}
     held.pattern = "trance"
-    assert sent[-1]["arp"]["pattern"] == "trance" and sent[-1]["arp"]["beats"] == 0.5
+    assert sent[-1]["arp"]["pattern"] == "1^ - 3 2 - 1^ 3 -" and sent[-1]["arp"]["beats"] == 0.5      # a name is sent as its steps
     held.speed = 20                                                          # and a speed the place of the step
     assert sent[-1]["arp"]["rate"] == 20 and "beats" not in sent[-1]["arp"]
     held.style = "slide"
@@ -347,10 +350,119 @@ def test_a_musical_arpeggio_is_counted_in_beats(sent):
     lead.arp("C", order="up-down2", pattern="1 - 3 2 _ 1 3 5^")
     assert sent[-1]["arp"]["order"] == 5 and sent[-1]["arp"]["pattern"] == "1 - 3 2 _ 1 3 5^"
     for how, says in (({"step": "sixteenth", "speed": 30}, "say how fast one way"), ({"style": "bounce"}, 'style is "strike"'),
-                      ({"accent": [2]}, "accent is how hard"), ({"pattern": "1 two 3"}, "a pattern is steps"),
+                      ({"accent": [2]}, "accent is how hard"), ({"pattern": "1 two 3"}, "a pattern is up to 32 steps"),
                       ({"order": "sideways"}, "not an order"), ({"step": "sixtieth"}, "step"), ({"octave": 2}, "arp takes")):
         with pytest.raises(ValueError, match=says):
             lead.arp("Cm7", **how)
+    for batch in sent.batches:
+        check(batch)
+
+
+def test_a_note_s_pitch_can_move(sent):
+    """As synths.js 426befb has it: glide, bend, slide and vibrato on play, start and play_note, in seconds and semitones."""
+    lead = make_synth("lead")
+    lead.play("A4", 1, bend="scoop")
+    assert sent[-1]["bend"] == {"shape": "scoop", "over": 0.125} and "glide" not in sent[-1]
+    lead.play("C5", 1, glide="sixteenth")
+    assert sent[-1]["glide"] == 0.125
+    lead.play("C5", 1, glide=True, vibrato=True)
+    assert sent[-1]["glide"] == 0.125 and sent[-1]["vibrato"] == {"depth": 0.3, "rate": 6, "delay": 0.25}
+    lead.play("A3", 1, bend="fall")
+    assert sent[-1]["bend"] == {"shape": "fall", "over": 0.25}
+    lead.play("C4", 1, slide=12)
+    assert sent[-1]["bend"] == {"to": 12, "over": 0.125}
+    lead.play("C4", 1, bend={"to": "E4", "over": "eighth"})
+    assert sent[-1]["bend"] == {"to": 4, "over": 0.25}
+    lead.play("C4", 1, bend={"shape": "scoop", "to": -5}, vibrato={"depth": 0.5, "rate": 5, "delay": "quarter"})
+    assert sent[-1]["bend"] == {"shape": "scoop", "to": -5, "over": 0.125} and sent[-1]["vibrato"] == {"depth": 0.5, "rate": 5, "delay": 0.5}
+    held = lead.start("C4", vibrato={"delay": 0})
+    assert sent[-1]["vibrato"]["delay"] == 0 and sent[-1]["len"] is None
+    held.vibrato()
+    assert sent[-1]["op"] == "voice" and sent[-1]["vibrato"] == {"depth": 0.3, "rate": 6, "delay": 0}
+    held.vibrato(False)
+    assert sent[-1]["vibrato"] is False
+    held.stop(at=5)
+    assert sent[-1] == {"op": "off", "id": lead._id, "h": held._h, "t": 5}
+    play_note("A4", 1, bend="dip")
+    assert sent[-1]["bend"] == {"shape": "dip", "over": 0.25}
+    lead.note_on("C4", 0.8, at=7)
+    assert sent[-1]["t"] == 7 and sent[-1]["note"] == [60] and sent[-1]["len"] is None
+    lead.note_off("C4", at=8)
+    assert sent[-1] == {"op": "off", "id": lead._id, "note": [60], "t": 8}
+    for how, says in (({"bend": "scoop", "slide": 2}, "a bend or a slide, not both"), ({"bend": "swoop"}, "bend is"), ({"slide": {}}, "slide is"),
+                      ({"vibrato": 3}, "vibrato is True")):
+        with pytest.raises(ValueError, match=says):
+            lead.play("C4", **how)
+    with pytest.raises(ValueError, match="needs one note to bend from"):
+        lead.play(["C4", "E4"], bend={"to": "G4"})
+    for batch in sent.batches:
+        check(batch)
+
+
+def test_patterns_are_settings_kept_as_text(sent):
+    """lead.arp_pattern and pad.trance_gate: text, a name or a list in; text sent, and text read back."""
+    pad = make_synth("pad")
+    pad.trance_gate = "x.x.xx.x"
+    assert sent[-1] == {"op": "set", "id": pad._id, "tranceGate": "x.x.xx.x", "t": sent[-1]["t"]}
+    assert pad.trance_gate == "x.x.xx.x" and pad.trance_gate_depth == 1 and pad.get("trance_gate") == "x.x.xx.x"
+    pad.trance_gate = "trance"
+    assert sent[-1]["tranceGate"] == "x.x.xx.xx.x.xx.x" and pad.describe("trance_gate")["named"] == "trance"
+    pad.trance_gate = [1, 0, 0.5, 0.25]
+    assert sent[-1]["tranceGate"] == "x.52"
+    pad.set(trance_gate="X. x.", cutoff=900)
+    assert sent[-2]["tranceGate"] == "x.x." and sent[-1]["set"] == {"cutoff": 900}
+    pad.trance_gate = "off"
+    assert sent[-1]["tranceGate"] == "" and pad.trance_gate == "" and pad.trance_gate_depth == 0
+    pad.set_trance_gate("pump", rate="eighth", depth=0.8, smooth=0.02)
+    assert sent[-2]["tranceGate"] == "2468246824682468" and sent[-1]["set"] == {"gate.rate": 2, "gate.depth": 0.8, "gate.smooth": 0.02}
+    assert (pad.trance_gate_rate, pad.trance_gate_depth, pad.trance_gate_smooth) == (2, 0.8, 0.02)
+    pad.trance_gate_swing = 0.2
+    assert sent[-1]["set"] == {"trance_gate_swing": 0.2}
+    lead = make_synth("lead")
+    lead.arp_pattern = "trance"
+    assert sent[-1] == {"op": "set", "id": lead._id, "arpPattern": "1^ - 3 2 - 1^ 3 -", "t": sent[-1]["t"]} and lead.arp_pattern == "1^ - 3 2 - 1^ 3 -"
+    lead.arp_pattern = [1, 0, 3, 2]
+    assert sent[-1]["arpPattern"] == "1 - 3 2"
+    d = lead.describe("arp_pattern")
+    assert d["kind"] == "pattern" and d["value"] == "1 - 3 2" and d["patterns"]["bounce"] == "1 2 3 2" and "named" not in d and d["steps"] == 32
+    lead.arp("Cm7", pattern="off")
+    assert sent[-1]["arp"]["pattern"] == ""          # this one follows none, whatever the synth's own is
+    lead.arp_pattern = None
+    assert sent[-1]["arpPattern"] == "" and lead.arp_pattern == ""
+    assert lead.arp_step() == -1 and lead.trance_gate_step() == -1 and lead.get("arp_step") == -1
+    synths.receive_sound_events({"type": "reading", "id": lead._id, "samples": [], "level": [0, 0], "notes": [], "arpStep": 3, "tranceGateStep": 5})
+    assert lead.arp_step() == 3 and lead.trance_gate_step() == 5
+    for wrong, says in (("x.y", "a trance gate's pattern"), ("x" * 33, "up to 32 steps"), ([2, 3], "a trance gate's pattern")):
+        with pytest.raises(ValueError, match=says):
+            pad.trance_gate = wrong
+    with pytest.raises(ValueError, match="a pattern is up to 32 steps"):
+        lead.arp_pattern = "1 two"
+    with pytest.raises(ValueError, match='there is no "speed" to say here'):
+        pad.set_trance_gate("x.", speed=3)
+    for batch in sent.batches:
+        check(batch)
+
+
+def test_a_song_s_mix_and_loop(sent):
+    song = play_song("tune.mod")
+    left = song.channel(0)
+    assert left.volume is None and left is song.channel(0)
+    left.volume = 0.6
+    assert sent[-1] == {"op": "song", "id": song.id, "do": "mix", "channel": 0, "volume": 0.6, "t": sent[-1]["t"]} and left.volume == 0.6
+    left.pan, left.reverb, left.echo = -0.5, 0.4, 0.3
+    assert [(c["do"], c.get("pan"), c.get("reverb"), c.get("echo")) for c in sent[-3:]] == [("mix", -0.5, None, None), ("mix", None, 0.4, None), ("mix", None, None, 0.3)]
+    song.loop([1, 0], [5, 0])
+    assert sent[-1] == {"op": "song", "id": song.id, "do": "loop", "start": [1, 0], "end": [5, 0], "t": sent[-1]["t"]}
+    song.loop(2, [4])
+    assert (sent[-1]["start"], sent[-1]["end"]) == ([2, 0], [4, 0])
+    song.loop(None)
+    assert (sent[-1]["start"], sent[-1]["end"]) == (None, None)
+    with pytest.raises(ValueError, match="a place in the song's order"):
+        song.loop([1, -1])
+    with pytest.raises(AttributeError, match="volume, pan, reverb and echo"):
+        left.width = 1
+    set_effects(reverb_level=0.8, echo_level=0.7)
+    assert sent[-1]["set"] == {"reverb_level": 0.8, "echo_level": 0.7}
     for batch in sent.batches:
         check(batch)
 

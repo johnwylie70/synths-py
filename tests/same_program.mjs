@@ -66,6 +66,39 @@ held.step = 'eighth'
 held.order = 'together'
 lead.arp(['C4', 'E4', 'G4'], 1, { style: 'slide', pattern: "1 - 3 2 _ 1 3 5^" })
 s.playArp('Cm7', { speed: 30, order: 'down' })
+lead.play('A4', 1, { bend: 'scoop' })
+lead.play('C5', 1, { glide: 'sixteenth' })
+lead.play('E5', 2, { vibrato: true, glide: true })
+lead.play('A3', 1, { bend: 'fall' })
+lead.play('C4', 1, { slide: 12 })
+lead.play('C4', 1, { bend: { to: 'E4', over: 'eighth' }, vibrato: { depth: 0.5, rate: 5, delay: 'quarter' } })
+lead.play('C4', 1, { slide: { to: -3, over: 0.5 } })
+const moved = lead.start('C4', { bend: 'dip' })
+moved.vibrato()
+moved.vibrato({ depth: 1 })
+moved.vibrato(false)
+s.playNote('A4', 1, { bend: { shape: 'scoop', to: -5 } })
+lead.arpPattern = 'trance'
+lead.arpPattern = [1, 0, 3, 2]
+lead.arp('Cm7', { pattern: 'off' })
+lead.arp('Cm7', { pattern: [1, null, "3^"] })
+lead.arpPattern = 'off'
+const gated = s.makeSynth('pad', { echo: 0.3 })
+gated.tranceGate = 'x.x.xx.x'
+gated.tranceGate = 'pump'
+gated.tranceGate = [1, 0, 0.5, 0.25]
+gated.set({ tranceGate: 'X. x.', cutoff: 900 })
+gated.setTranceGate('x.x.xx.x', { rate: 'eighth', depth: 0.8, smooth: 0.02 })
+gated.tranceGateSwing = 0.2
+gated.tranceGate = null
+s.setEffects({ reverbLevel: 0.8, echoLevel: 0.7 })
+song.channel(0).volume = 0.6
+song.channel(0).pan = -0.5
+song.channel(3).reverb = 0.4
+song.channel(3).echo = 0.3
+song.loop([1, 0], [5, 0])
+song.loop(2, [4])
+song.loop(null)
 s.stopMicrophone()
 await new Promise((yes) => setTimeout(yes, 0))
 s.flush()
