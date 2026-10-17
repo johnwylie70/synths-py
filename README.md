@@ -766,6 +766,12 @@ pytest
 
 They need no browser and make no sound: they check the names against synths.js, every command against the command format, and what a mistake says. The tests of the microphone and the voices listen without one: where [node](https://nodejs.org) and synths.js are beside this repository, synths.js's offline player renders Python's commands with a tone in a microphone's place, and the pitch, the length of a recording and a saved WAV file are measured (they are skipped otherwise). The tests that listen (a scene heard under `pyctures run` and in a built page, with dials and a keyboard) are in Pyctures.
 
+## Megademo
+
+[![Megademo: an equaliser with a column of lights for every channel of the song](docs/images/megademo.jpg)](https://github.com/johnwylie70/megademo)
+
+[Megademo](https://github.com/johnwylie70/megademo) is a demo in the style of the ones made on the C64 and Amiga, made in Circuitry Studio. A whole demo cut to one tracker song, played by synths: every cut and flash is worked out from where the song is. It is one file, `main.py`, and it is worth reading for how it is done. [Watch it on YouTube](https://youtu.be/6fKMwrOik5k).
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
