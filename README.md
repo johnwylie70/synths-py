@@ -293,6 +293,8 @@ What a synth does:
 
 Every setting is a plain attribute, and reads back what you set: `lead.cutoff = 800`, `print(lead.cutoff)`.
 
+[Every setting by name](docs/settings.md) is listed in one page, with the values it takes, where it starts, its JavaScript spelling and the control that suits it: a dial, a select or a toggle from [pydials](https://github.com/johnwylie70/pydials). It is written from the library's own table of names.
+
 | Setting | What it is |
 |---|---|
 | `wave` | the raw sound: `"sine"` (pure), `"triangle"` (soft), `"saw"` (bright), `"square"` (hollow), `"pulse"` (with `width`, 0.02 to 0.98) |
@@ -581,7 +583,7 @@ use_midi_input("Keystation 49")          # listen to this one alone (otherwise: 
 use_midi_output("Minilogue")             # send to this one (otherwise: the first)
 ```
 
-To choose on the screen instead, `midi_input()` and `midi_output()` are things a pydials control is tied to, with a `"device"` and a `"channel"`: `select("device", midi_input(), "device")`. `lead.midi_input()` is the same for one synth alone. The choices follow what is plugged in, which the page says a frame late.
+To choose on the screen instead, `midi_input()` and `midi_output()` are things a pydials control is tied to, with a `"device"` and a `"channel"`: `select("device", midi_input(), "device")`. `lead.midi_input()` is the same for one synth alone. The choices follow what is plugged in, which the page says a frame late. The keyboard of pydials has a button for the same choice: `keyboard(lead, midi=True)` puts a MIDI button on its strip, and a tap opens the device and channel panel on `lead.midi_input()` (see [The MIDI button](https://github.com/johnwylie70/pydials#the-midi-button)).
 
 `midi_devices()` gives the same `{"inputs": [...], "outputs": [...], "available": ...}` at any time, but the page has to be asked and its answer comes with a later frame: the first call gives empty lists with `available` as `None`. That is why `on_midi_devices` is there (in a scene, `def on_midi_devices(devices):`). `available` is `False` when there is no MIDI. `stop_midi()` forgets every function you gave and stops everything MIDI is doing.
 
