@@ -706,6 +706,8 @@ loud = lead.level()               # how loud it is, [left, right], each from 0 t
 held = lead.notes()               # the notes it is sounding, as numbers
 ```
 
+To see the frequencies in the wave, [pydials](https://github.com/johnwylie70/pydials#spectrum) has a control for it, `spectrum(lead)`, and a painter for your own, `c.spectrum`, in `custom()`: the page works the spectrum out from all the samples, and Python is sent it.
+
 `sound_output()` has the same three for everything that is sounding, the microphone has them for your voice, and a song has them a channel at a time: `song.channel(3).level()`. They are **a frame late**: Python cannot ask the page and be answered, so the first call asks the page to start saying, and from the next frame on each call gives what the page said with that frame. The very first call gives an empty list, zeros and no notes. The page stops saying a second and a half after your program stops asking. (With pydials, `scope(lead)` and `meter(lead)` are drawn by the page itself and are not late at all.)
 
 ## Volume, mute and stop
