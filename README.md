@@ -8,10 +8,12 @@ Prefer JavaScript? [synths.js](https://github.com/johnwylie70/synths.js) is the 
 
 ## Install
 
-**synths is not published yet.** It is not on PyPI, and the Pyctures that `pip install pyctures` gives today (0.2.0) has no sound in it. Until the release that has, sound runs from a checkout of Pyctures that carries it (Pyctures keeps a copy of synths inside itself):
+**synths is on PyPI as a beta** (`pip install synths`). The sound is played by the Pyctures page, and the Pyctures that `pip install pyctures` gives today (0.2.0) has no sound in it. Until the release that has, use Pyctures from GitHub (it keeps a copy of synths inside itself):
 
 ```bash
-pip install -e path/to/pyctures
+git clone https://github.com/johnwylie70/pyctures
+pip install -e pyctures
+pip install synths
 ```
 
 From that release on, this is all there will be to it:
