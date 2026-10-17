@@ -132,7 +132,48 @@ scope(lead)
 keyboard(lead, octave=4)
 ```
 
+![A synth panel made with pydials: a select, two dials and two sliders in a row, a scope showing the wave, and a piano keyboard with three keys held](docs/images/synth-panel.png)
+
 A key sounds the moment it is touched and a dial is heard as it turns, because the page plays the synth itself; Python is told afterwards, so `lead.cutoff` reads what the dial says.
+
+## Sheet music
+
+With [pynotation](https://github.com/johnwylie70/pynotation) a tune is written out as notes on a staff, and the notes light as they play. It takes the same note text as `play_notes`, so the tune you hear is the tune you see:
+
+```python
+from pyctures import *
+from synths import *
+from pydials import *
+from pynotation import *
+
+lead = make_synth("keys")
+page = show_notes("E4 D4 C4 D4 E4 E4 E4:2", "quarter", title="Mary had a little lamb")
+page.play_along("wait", synth=lead)        # the line waits at each note until you play it
+keyboard(page, octave=4, octaves=1)        # a pydials keyboard plays the page
+
+def draw():
+    background("#12261e")
+```
+
+![The play-along scene: Mary had a little lamb written out, a line at the first note, and piano keys below with a key lit](docs/images/play-along.jpg)
+
+A tracker song can be written out too, a staff for each channel you choose, and the page follows the song as it plays. Tap a bar and the song jumps there:
+
+```python
+from pyctures import *
+from synths import *
+from pynotation import *
+
+song = play_song("night_drive.json")
+show_notes("night_drive.json", channels=[3, 1], follow=song)    # the tune and the bass, a staff each
+
+def draw():
+    background("#0b1020")
+```
+
+![A song playing with its tune and bass written out on two staves](docs/images/song.jpg)
+
+[`night_drive.json`](https://github.com/johnwylie70/pynotation/blob/main/examples/songs/night_drive.json) is the song above, and the rest of what pynotation can do is in its [README](https://github.com/johnwylie70/pynotation).
 
 ## Notes
 
